@@ -1,0 +1,24 @@
+{
+    "format": "Xcode",
+    "formal_name": "App Name",
+    "app_name": "{{ cookiecutter.formal_name|lower|replace(' ', '-') }}",
+    "class_name": "{{ cookiecutter.formal_name.title().replace(' ','').replace('-','').replace('!','').replace('.','').replace(',','') }}",
+    "module_name": "{{ cookiecutter.app_name|replace('-', '_') }}",
+    "author": "Example Corporation",
+    "bundle": "com.example",
+    "bundle_identifier": "{{ cookiecutter.bundle }}.{{ cookiecutter.app_name|replace('_', '-') }}",
+    "splash_background_color": "#FFFFFF",
+    "info": "",
+    "version": "1.0",
+    "build": "1",
+    "python_version": "3.X.0",
+    "_copy_without_render": [
+        ".gitignore",
+        "*.png"
+    ],
+    "_extensions": [
+        "briefcase.integrations.cookiecutter.PythonVersionExtension",
+        "briefcase.integrations.cookiecutter.RGBExtension",
+        "briefcase.integrations.cookiecutter.PListExtension"
+    ]
+}

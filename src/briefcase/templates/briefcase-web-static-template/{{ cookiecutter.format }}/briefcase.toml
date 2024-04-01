@@ -1,0 +1,6 @@
+# Generated using Python {{ cookiecutter.python_version }}
+[paths]
+app_path = "app"
+app_requirements_path = "requirements.txt"
+
+icon.32 = "www/static/logo-32.png"
