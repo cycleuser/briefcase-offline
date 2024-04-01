@@ -3,9 +3,17 @@
 This is a personal fork of the original briefcase project with several embedded templates.
 It is for the usage of users who can hardly visit GtiHub and not recommend to install it on any other situation.
 
-On windows, there might be error occurred since not having Windows Long Path support enabled. 
+On windows, there might be error occurred since not having Windows Long Path support enabled.
 
 You can find information on how to enable this at https://pip.pypa.io/warnings/enable-long-paths
+
+
+```Reg
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem]
+"LongPathsEnabled"=dword:00000001
+```
 
 ## Installation
 
