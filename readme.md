@@ -64,38 +64,93 @@ python -m briefcase new
 ```
 ![image](https://github.com/cycleuser/briefcase/assets/6130092/e008a59e-5dad-4f27-95a3-f12b13af61a8)
 
-## Get the Offline Pack
+# A Partial Offline Pack
 
+The purpose of this part is to make a pack with all the tools you need to develop a BeeWare app.
 
+And what I have done is only to pack the tools needed and modify some parts of the code.
 
-## Briefcase with Offline tools
+It is just for those who can not access to the GitHub and Google to download the related tools.
 
-Download the JDK and Android_SDK folders, and go to the downloaded path.
+The pack can be really huge, but you can just download it and copy it anywhere.
 
-For Windows, you may need to run code below on powershell.
+You may still need to download gradle and using pypi even with this pack.
+
+But at least these websites are not totally blocked in some particular area.
+
+This is a pack with Python, JDK and Android SDK, currently for Windows only.
+
+The Python is 3.12.1.
+The JDK is 17.0.10.
+The Android SDK is 33.0.3 and 34.0.0.
+
+##### [Download Link of BeeWare_Dev_Win.zip]() gonna be updated later.
+##### It is too large (above 4G) and gonna cost several hours.
+
+Download the BeeWare_Dev_Win.zip and unzip it into a pure English path.
+It should be like this.
+
+![](./images/structure.png)
+
+Then open your powershell and run code below to enter the path.
+Then you can just run the `set_path.ps1` file to activate the environment.
 
 ```Powershell
-# SetEnvironmentVariables.ps1
+cd BeeWare_Dev_Win
+./set_path.ps1
+```
+
+The `set_path.ps1` is just a file that deactives the current environment and set the new environment variables, including Android SDK, Java, and Python.
+
+```Powershell
+# set_path.ps1
+conda deactivate
 $CurrentPath = (Get-Location).Path
 $AndroidSdkPath = Join-Path -Path $CurrentPath -ChildPath "android_sdk"
 $JavaPath = Join-Path -Path $CurrentPath -ChildPath "java17"
+$PythonPath = Join-Path -Path $CurrentPath -ChildPath "python"
+
 $env:ANDROID_HOME = $AndroidSdkPath
 $env:JAVA_HOME = $JavaPath
+$env:PYTHON_HOME = $PythonPath
+
+# Add the new Python path to the system Path
+$env:Path += ";$PythonPath"
+
 Write-Output "ANDROID_HOME set to $env:ANDROID_HOME"
 Write-Output "JAVA_HOME set to $env:JAVA_HOME"
+Write-Output "PYTHON_HOME set to $env:PYTHON_HOME"
+
+# p -c "import sys;print(sys.executable)"
 ```
 
-For Linux, you may need to run code below on bash.
+The output should be like below, where I put the `BeeWare_Dev_Win` under `D:\`.
+
+```Powershell
+(base) PS C:\Users\UserName> cd D:\BeeWare_Dev_Win
+PS D:\BeeWare_Dev_Win> ./set_path.ps1
+ANDROID_HOME set to D:\BeeWare_Dev_Win\android_sdk
+JAVA_HOME set to D:\BeeWare_Dev_Win\java17
+PYTHON_HOME set to D:\BeeWare_Dev_Win\python
+PS D:\BeeWare_Dev_Win>
+```
+
+When finished the environment activation, you can run `p -c "import sys;print(sys.executable)"` to test.
+It should print your customed location of `p.exe` which is a copy of `python.exe` under your `$PythonPath`.
+
+Then you can run `p -m briefcase new --offline` to build a new beeware project directly without templates downloading progress.
+
+![](./images/run.png)
+
+In fact, just add the `p -m ` before `briefcase new` to make it work.
 
 ```Bash
-#!/bin/bash
-CurrentPath=$(pwd)
-AndroidSdkPath="$CurrentPath/android_sdk"
-JavaPath="$CurrentPath/java17"
-export ANDROID_HOME=$AndroidSdkPath
-export JAVA_HOME=$JavaPath
-echo "ANDROID_HOME set to $ANDROID_HOME"
-echo "JAVA_HOME set to $JAVA_HOME"
+p -m briefcase new --offline # create the project
+p -m briefcase dev           # test the project
+p -m briefcase update        # update the project
+p -m briefcase update -r     # update dependencies
+p -m briefcase run           # run default
+p -m briefcase run Android   # Android
 ```
 
-Then you will be able to run `briefcase run Android` directly without downloading progress.
+For Linux, I haven't get it work yet.
