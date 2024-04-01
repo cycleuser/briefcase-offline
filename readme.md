@@ -67,7 +67,9 @@ python -m briefcase new
 
 ## Briefcase with Offline tools
 
-download the JDK and Android_SDK folders, and go to the downloaded path
+Download the JDK and Android_SDK folders, and go to the downloaded path.
+
+For Windows, you may need to run code below on powershell.
 
 ```Powershell
 # SetEnvironmentVariables.ps1
@@ -79,6 +81,8 @@ $env:JAVA_HOME = $JavaPath
 Write-Output "ANDROID_HOME set to $env:ANDROID_HOME"
 Write-Output "JAVA_HOME set to $env:JAVA_HOME"
 ```
+
+For Linux, you may need to run code below on bash.
 
 ```Bash
 #!/bin/bash
