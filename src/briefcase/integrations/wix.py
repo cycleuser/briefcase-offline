@@ -37,13 +37,8 @@ class WiX(ManagedTool):
 
     @property
     def download_url(self) -> str:
-        # return "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
-        import os
-        current_file_directory = os.path.dirname(os.path.abspath(__file__))
-        parent_directory = os.path.dirname(current_file_directory)
-        print(parent_directory)
-        
-        return (os.path.join(parent_directory, "wix314-binaries.zip"))
+        return "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
+
 
     @property
     def heat_exe(self) -> Path:
@@ -140,11 +135,18 @@ does not point to an install of the WiX Toolset.
 
     def install(self):
         """Download and install WiX."""
-        wix_zip_path = self.tools.download.file(
-            url=self.download_url,
-            download_path=self.tools.base_path,
-            role="WiX",
-        )
+        # wix_zip_path = self.tools.download.file(
+        #     url=self.download_url,
+        #     download_path=self.tools.base_path,
+        #     role="WiX",
+        # )
+
+        import os
+        current_file_directory = os.path.dirname(os.path.abspath(__file__))
+        parent_directory = os.path.dirname(current_file_directory)
+        print(parent_directory)
+        
+        wix_zip_path = os.path.join(parent_directory, "wix314-binaries.zip")
 
         try:
             with self.tools.input.wait_bar("Installing WiX..."):
