@@ -7,7 +7,6 @@ On windows, there might be error occurred since not having Windows Long Path sup
 
 You can find information on how to enable this at https://pip.pypa.io/warnings/enable-long-paths
 
-
 ```Reg
 Windows Registry Editor Version 5.00
 
@@ -64,3 +63,32 @@ If you want to use onlie templates, just remove the `--online` flag.
 python -m briefcase new
 ```
 ![image](https://github.com/cycleuser/briefcase/assets/6130092/e008a59e-5dad-4f27-95a3-f12b13af61a8)
+
+
+## Briefcase with Offline tools
+
+download the JDK and Android_SDK folders, and go to the downloaded path
+
+```Powershell
+# SetEnvironmentVariables.ps1
+$CurrentPath = (Get-Location).Path
+$AndroidSdkPath = Join-Path -Path $CurrentPath -ChildPath "android_sdk"
+$JavaPath = Join-Path -Path $CurrentPath -ChildPath "java17"
+$env:ANDROID_HOME = $AndroidSdkPath
+$env:JAVA_HOME = $JavaPath
+Write-Output "ANDROID_HOME set to $env:ANDROID_HOME"
+Write-Output "JAVA_HOME set to $env:JAVA_HOME"
+```
+
+```Bash
+#!/bin/bash
+CurrentPath=$(pwd)
+AndroidSdkPath="$CurrentPath/android_sdk"
+JavaPath="$CurrentPath/java17"
+export ANDROID_HOME=$AndroidSdkPath
+export JAVA_HOME=$JavaPath
+echo "ANDROID_HOME set to $ANDROID_HOME"
+echo "JAVA_HOME set to $JAVA_HOME"
+```
+
+Then you will be able to run `briefcase run Android` directly without downloading progress.
