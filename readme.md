@@ -15,14 +15,14 @@ You may directly install it with pip.
 
 ```Bash
 git config --system core.longpaths true
-pip install git+https://github.com/cycleuser/briefcase.git
+pip install git+https://github.com/cycleuser/briefcase-offline.git
 ```
 
 If you can hardly visit GtiHub, please use the commands below:
 
 ```Bash
 git config --system core.longpaths true
-pip install git+https://gitlab.com/GeoPyTool/briefcase.git
+pip install git+https://gitlab.com/GeoPyTool/briefcase-offline.git
 ```
 
 ### Clone and Install
