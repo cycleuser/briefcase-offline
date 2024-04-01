@@ -84,8 +84,11 @@ The Python is 3.12.1.
 The JDK is 17.0.10.
 The Android SDK is 33.0.3 and 34.0.0.
 
-##### [Download Link of BeeWare_Dev_Win.zip]() gonna be updated later.
-##### It is too large (above 4G) and gonna cost several hours.
+##### [Download Link of BeeWare_Dev_Win.zip](https://pan.baidu.com/s/1euElzjzQNxLxGvuel_BIUg?pwd=cuac)
+##### It is too large (above 4G)s.
+
+Link：https://pan.baidu.com/s/1euElzjzQNxLxGvuel_BIUg?pwd=cuac 
+Code：cuac
 
 Download the BeeWare_Dev_Win.zip and unzip it into a pure English path.
 It should be like this.
