@@ -643,10 +643,6 @@ class NewCommand(BaseCommand):
         self.input.prompt("Let's build a new Briefcase app!")
 
         if template is None:
-            pass
-            import os
-            current_file_directory = os.path.dirname(os.path.abspath(__file__))
-            print(template)
             import os
             current_file_directory = os.path.dirname(os.path.abspath(__file__))
             parent_directory = os.path.dirname(current_file_directory)

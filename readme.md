@@ -64,6 +64,9 @@ python -m briefcase new
 ```
 ![image](https://github.com/cycleuser/briefcase/assets/6130092/e008a59e-5dad-4f27-95a3-f12b13af61a8)
 
+## Get the Offline Pack
+
+
 
 ## Briefcase with Offline tools
 

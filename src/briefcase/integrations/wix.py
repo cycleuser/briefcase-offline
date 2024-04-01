@@ -37,7 +37,13 @@ class WiX(ManagedTool):
 
     @property
     def download_url(self) -> str:
-        return "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
+        # return "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip"
+        import os
+        current_file_directory = os.path.dirname(os.path.abspath(__file__))
+        parent_directory = os.path.dirname(current_file_directory)
+        print(parent_directory)
+        
+        return (os.path.join(parent_directory, "wix314-binaries.zip"))
 
     @property
     def heat_exe(self) -> Path:
