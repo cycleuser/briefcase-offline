@@ -165,7 +165,7 @@ Delete {wix_zip_path} and run briefcase again.
             ) from e
 
         # Zip file no longer needed once unpacked.
-        wix_zip_path.unlink()
+        # wix_zip_path.unlink()
 
     def uninstall(self):
         """Uninstall WiX."""
