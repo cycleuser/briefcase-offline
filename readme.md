@@ -42,7 +42,7 @@ For example:
 
 ```Bash
 cd D:/
-git clone https://github.com/cycleuser/briefcase.git
+git clone https://github.com/cycleuser/briefcase-offline.git
 cd briefcase
 pip install .
 ```
