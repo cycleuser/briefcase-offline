@@ -1,6 +1,7 @@
 # Briefcase with Offline Template embedded 
 
-This is a fork of the original briefcase project with several embedded templates.
+This is a personal fork of the original briefcase project with several embedded templates.
+It is for the usage of users who can hardly visit GtiHub and not recommend to install it on any other situation.
 
 ## Installation
 
@@ -21,8 +22,6 @@ pip install git+https://gitlab.com/GeoPyTool/briefcase.git
 ```
 
 ### Clone and Install
-
-
 
 Please notice that the path can be really long, so you may need to set `core.longpaths` to `true` in your git config. But you may still encounter some problems like `No such file or directory` errors on some templates.
 
