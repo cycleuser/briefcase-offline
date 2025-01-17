@@ -305,8 +305,8 @@ class iOSXcodeCreateCommand(iOSXcodePassiveMixin, CreateCommand):
         :param app: The app configuration
         :returns: A list of additional arguments
         """
-        return [
-            "--prefer-binary",
+        return super()._extra_pip_args(app) + [
+            "--only-binary=:all:",
             "--extra-index-url",
             "https://pypi.anaconda.org/beeware/simple",
         ]
@@ -317,17 +317,32 @@ class iOSXcodeCreateCommand(iOSXcodePassiveMixin, CreateCommand):
         requires: list[str],
         app_packages_path: Path,
     ):
+        # Determine the min iOS version from the VERSIONS file in the support package.
+        versions = dict(
+            [part.strip() for part in line.split(": ", 1)]
+            for line in (
+                (self.support_path(app) / "VERSIONS")
+                .read_text(encoding="UTF-8")
+                .split("\n")
+            )
+            if ": " in line
+        )
+        ios_min_tag = versions.get("Min iOS version", "13.0").replace(".", "_")
+
         # Perform the initial install pass targeting the "iphoneos" platform
         super()._install_app_requirements(
             app,
             requires=requires,
             app_packages_path=app_packages_path.parent / "app_packages.iphoneos",
             progress_message="Installing app requirements for iPhone device...",
+            pip_args=[
+                f"--platform=ios_{ios_min_tag}_arm64_iphoneos",
+            ],
             pip_kwargs={
                 "env": {
                     "PYTHONPATH": str(
                         self.support_path(app) / "platform-site/iphoneos.arm64"
-                    ),
+                    )
                 }
             },
         )
@@ -339,13 +354,16 @@ class iOSXcodeCreateCommand(iOSXcodePassiveMixin, CreateCommand):
             requires=requires,
             app_packages_path=app_packages_path.parent / "app_packages.iphonesimulator",
             progress_message="Installing app requirements for iPhone simulator...",
+            pip_args=[
+                f"--platform=ios_{ios_min_tag}_{self.tools.host_arch}_iphonesimulator",
+            ],
             pip_kwargs={
                 "env": {
                     "PYTHONPATH": str(
                         self.support_path(app)
                         / "platform-site"
                         / f"iphonesimulator.{self.tools.host_arch}"
-                    ),
+                    )
                 }
             },
         )
@@ -402,8 +420,6 @@ class iOSXcodeBuildCommand(iOSXcodePassiveMixin, BuildCommand):
                         "build",
                         "-project",
                         self.project_path(app),
-                        "-destination",
-                        'platform="iOS Simulator"',
                         "-configuration",
                         "Debug",
                         "-arch",
@@ -514,11 +530,14 @@ class iOSXcodeRunCommand(iOSXcodeMixin, RunCommand):
         # Try to uninstall the app first. If the app hasn't been installed
         # before, this will still succeed.
         self.logger.info(f"Installing {label}...", prefix=app.app_name)
-        with self.input.wait_bar(
-            "Uninstalling any existing app version..."
-        ) as keep_alive, self.tools.subprocess.Popen(
-            ["xcrun", "simctl", "uninstall", udid, app.bundle_identifier]
-        ) as uninstall_popen:
+        with (
+            self.input.wait_bar(
+                "Uninstalling any existing app version..."
+            ) as keep_alive,
+            self.tools.subprocess.Popen(
+                ["xcrun", "simctl", "uninstall", udid, app.bundle_identifier]
+            ) as uninstall_popen,
+        ):
             while (ret_code := uninstall_popen.poll()) is None:
                 keep_alive.update()
                 time.sleep(0.25)
@@ -529,11 +548,12 @@ class iOSXcodeRunCommand(iOSXcodeMixin, RunCommand):
             )
 
         # Install the app.
-        with self.input.wait_bar(
-            f"Installing new {label} version..."
-        ) as keep_alive, self.tools.subprocess.Popen(
-            ["xcrun", "simctl", "install", udid, self.binary_path(app)]
-        ) as install_popen:
+        with (
+            self.input.wait_bar(f"Installing new {label} version...") as keep_alive,
+            self.tools.subprocess.Popen(
+                ["xcrun", "simctl", "install", udid, self.binary_path(app)]
+            ) as install_popen,
+        ):
             while (ret_code := install_popen.poll()) is None:
                 keep_alive.update()
                 time.sleep(0.25)
@@ -570,7 +590,8 @@ class iOSXcodeRunCommand(iOSXcodeMixin, RunCommand):
                 f'senderImagePath ENDSWITH "/{app.formal_name}"'
                 f' OR (processImagePath ENDSWITH "/{app.formal_name}"'
                 ' AND (senderImagePath ENDSWITH "-iphonesimulator.so"'
-                ' OR senderImagePath ENDSWITH "-iphonesimulator.dylib"))',
+                ' OR senderImagePath ENDSWITH "-iphonesimulator.dylib"'
+                ' OR senderImagePath ENDSWITH "_ctypes.framework/_ctypes"))',
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

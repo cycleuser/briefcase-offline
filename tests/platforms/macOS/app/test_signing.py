@@ -9,7 +9,7 @@ from briefcase.commands.base import BaseCommand
 from briefcase.console import Console, Log, LogLevel
 from briefcase.exceptions import BriefcaseCommandError
 from briefcase.integrations.subprocess import Subprocess
-from briefcase.platforms.macOS import macOSSigningMixin
+from briefcase.platforms.macOS import SigningIdentity, macOSSigningMixin
 from briefcase.platforms.macOS.app import macOSAppMixin
 from tests.utils import DummyConsole
 
@@ -46,10 +46,9 @@ def dummy_command(tmp_path):
 def sign_call(
     tmp_path,
     filepath,
-    identity="Sekrit identity (DEADBEEF)",
+    identity,
     entitlements=True,
     runtime=True,
-    deep=False,
 ):
     """A test utility method to quickly construct a subprocess call to invoke codesign
     on a file."""
@@ -57,7 +56,7 @@ def sign_call(
         "codesign",
         filepath,
         "--sign",
-        identity,
+        identity.id,
         "--force",
     ]
     if entitlements:
@@ -74,8 +73,6 @@ def sign_call(
                 "runtime",
             ]
         )
-    if deep:
-        args.append("--deep")
 
     return mock.call(args, stderr=subprocess.PIPE, check=True)
 
@@ -102,51 +99,51 @@ def mock_codesign(results):
     return _codesign
 
 
-def test_explicit_identity_checksum(dummy_command):
-    """If the user nominates an identity by checksum, it is used."""
+def test_explicit_app_identity_checksum(dummy_command):
+    """If the user nominates an app identity by checksum, it is used."""
     # get_identities will return some options.
     dummy_command.get_identities.return_value = {
-        "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corporation Ltd (Z2K4383DLE)",
+        "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
         "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
     }
 
     # The identity will be the one the user specified as an option.
     result = dummy_command.select_identity("11E77FB58F13F6108B38110D5D92233C58ED38C5")
 
-    assert result == (
-        "11E77FB58F13F6108B38110D5D92233C58ED38C5",
-        "iPhone Developer: Jane Smith (BXAH5H869S)",
+    assert result == SigningIdentity(
+        id="11E77FB58F13F6108B38110D5D92233C58ED38C5",
+        name="iPhone Developer: Jane Smith (BXAH5H869S)",
     )
 
     # User input was not solicited
     assert dummy_command.input.prompts == []
 
 
-def test_explicit_identity_name(dummy_command):
-    """If the user nominates an identity by name, it is used."""
+def test_explicit_app_identity_name(dummy_command):
+    """If the user nominates an app identity by name, it is used."""
     # get_identities will return some options.
     dummy_command.get_identities.return_value = {
-        "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corporation Ltd (Z2K4383DLE)",
+        "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
         "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
     }
 
     # The identity will be the one the user specified as an option.
     result = dummy_command.select_identity("iPhone Developer: Jane Smith (BXAH5H869S)")
 
-    assert result == (
-        "11E77FB58F13F6108B38110D5D92233C58ED38C5",
-        "iPhone Developer: Jane Smith (BXAH5H869S)",
+    assert result == SigningIdentity(
+        id="11E77FB58F13F6108B38110D5D92233C58ED38C5",
+        name="iPhone Developer: Jane Smith (BXAH5H869S)",
     )
 
     # User input was not solicited
     assert dummy_command.input.prompts == []
 
 
-def test_invalid_identity_name(dummy_command):
-    """If the user nominates an identity by name, it is used."""
+def test_invalid_app_identity_name(dummy_command):
+    """If the user nominates an app identity by name, it is used."""
     # get_identities will return some options.
     dummy_command.get_identities.return_value = {
-        "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corporation Ltd (Z2K4383DLE)",
+        "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
         "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
     }
 
@@ -158,8 +155,8 @@ def test_invalid_identity_name(dummy_command):
     assert dummy_command.input.prompts == []
 
 
-def test_implied_identity(dummy_command):
-    """If there is only one identity, it will still prompt with ad-hoc as a second
+def test_implied_app_identity(dummy_command):
+    """If there is only one app identity, it will still prompt with ad-hoc as a second
     option."""
     # get_identities will return some options.
     dummy_command.get_identities.return_value = {
@@ -171,16 +168,16 @@ def test_implied_identity(dummy_command):
 
     result = dummy_command.select_identity()
 
-    assert result == (
-        "11E77FB58F13F6108B38110D5D92233C58ED38C5",
-        "iPhone Developer: Jane Smith (BXAH5H869S)",
+    assert result == SigningIdentity(
+        id="11E77FB58F13F6108B38110D5D92233C58ED38C5",
+        name="iPhone Developer: Jane Smith (BXAH5H869S)",
     )
 
     # User input was solicited
     assert dummy_command.input.prompts
 
 
-def test_no_identities(dummy_command):
+def test_no_app_identities(dummy_command):
     """If there are no identities the user will be prompted to select with only ad-hoc
     as an option."""
     # get_identities will return some options.
@@ -191,23 +188,18 @@ def test_no_identities(dummy_command):
 
     result = dummy_command.select_identity()
 
-    assert result == (
-        "-",
-        (
-            "Ad-hoc identity. The resulting package will run but cannot be "
-            "re-distributed."
-        ),
-    )
+    # Result is the adhoc identity
+    assert result == SigningIdentity()
 
     # User input was solicited
     assert dummy_command.input.prompts
 
 
-def test_selected_identity(dummy_command):
-    """If there is only one identity, it is automatically picked."""
+def test_select_app_identity(dummy_command):
+    """The user can select from a list of app identities."""
     # get_identities will return some options.
     dummy_command.get_identities.return_value = {
-        "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corporation Ltd (Z2K4383DLE)",
+        "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
         "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
     }
 
@@ -216,24 +208,176 @@ def test_selected_identity(dummy_command):
 
     result = dummy_command.select_identity()
 
-    # The identity will be the only option available.
-    assert result == (
-        "11E77FB58F13F6108B38110D5D92233C58ED38C5",
-        "iPhone Developer: Jane Smith (BXAH5H869S)",
+    # The identity will be second of the returned values
+    assert result == SigningIdentity(
+        id="11E77FB58F13F6108B38110D5D92233C58ED38C5",
+        name="iPhone Developer: Jane Smith (BXAH5H869S)",
     )
 
     # User input was solicited once
     assert dummy_command.input.prompts == ["> "]
 
 
+def test_select_app_identity_no_adhoc(dummy_command):
+    """Adhoc identities can be excluded from the list of options."""
+    # get_identities will return some options.
+    dummy_command.get_identities.return_value = {
+        "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+        "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
+    }
+
+    # Return option 2
+    dummy_command.input.values = ["2"]
+
+    # Disallow adhoc identities. This will make the identities from get_identities the
+    # only available values.
+    result = dummy_command.select_identity(allow_adhoc=False)
+
+    # The identity will be second of the returned values
+    assert result == SigningIdentity(
+        id="11E77FB58F13F6108B38110D5D92233C58ED38C5",
+        name="iPhone Developer: Jane Smith (BXAH5H869S)",
+    )
+
+    # User input was solicited once
+    assert dummy_command.input.prompts == ["> "]
+
+
+def test_select_installer_identity(dummy_command):
+    """The user can select from a list of installer identities."""
+    # get_identities is invoked twice - once with app identities, and once with all identities.
+    dummy_command.get_identities.side_effect = [
+        {
+            "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+            "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
+        },
+        {
+            "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+            "4C1067833814CE4738EBD6F8903EC63C238B0CA3": "Developer ID Installer: Example Corp Ltd (Z2K4383DLE)",
+            "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
+            "8903EC63C238B04C138EBD6F067833814CE47CA3": "Developer ID Installer: Example Corp Ltd (Z2K4383DLE)",
+        },
+    ]
+
+    # Return option 2
+    dummy_command.input.values = ["2"]
+
+    result = dummy_command.select_identity(
+        app_identity=SigningIdentity(
+            id="38EBD6F8903EC63C238B04C1067833814CE47CA3",
+            name="Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+        )
+    )
+
+    # The identity will be the second of the returned options; ad-hoc won't be added
+    assert result == SigningIdentity(
+        id="8903EC63C238B04C138EBD6F067833814CE47CA3",
+        name="Developer ID Installer: Example Corp Ltd (Z2K4383DLE)",
+    )
+
+    # User input was solicited once
+    assert dummy_command.input.prompts == ["> "]
+
+
+def test_installer_identity_matching_app(dummy_command):
+    """The list of possible installer identities includes non-app identities from the
+    same team."""
+    # get_identities is invoked twice - once with app identities, and once with all identities.
+    dummy_command.get_identities.side_effect = [
+        {
+            "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+            "EBD6F8903EC63C238B0384C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (83DLEZ2K43)",
+            "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
+        },
+        {
+            # The app identity that will be selected
+            "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+            # A different app identity
+            "EBD6F8903EC63C238B0384C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (83DLEZ2K43)",
+            # An installer identity that doesn't match the selected app identity
+            "1067833814CE4738EB4CD6F8903EC63C238B0CA3": "Developer ID Installer: Example Corp Ltd (83DLEZ2K43)",
+            # An installer identity that *does* match the selected app identity
+            "4C1067833814CE4738EBD6F8903EC63C238B0CA3": "Developer ID Installer: Example Corp Ltd (Z2K4383DLE)",
+            # A different app identity
+            "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
+            # Another installer identity that match the selected app identity
+            "8903EC63C238B04C138EBD6F067833814CE47CA3": "Developer ID Installer: Example Corp Ltd (Z2K4383DLE)",
+        },
+    ]
+
+    # Return option 2
+    dummy_command.input.values = ["2"]
+
+    result = dummy_command.select_identity(
+        app_identity=SigningIdentity(
+            id="38EBD6F8903EC63C238B04C1067833814CE47CA3",
+            name="Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+        )
+    )
+
+    # The identity will be the second of the returned options; ad-hoc won't be added,
+    # and the installer identity for the other app identity won't be included
+    assert result == SigningIdentity(
+        id="8903EC63C238B04C138EBD6F067833814CE47CA3",
+        name="Developer ID Installer: Example Corp Ltd (Z2K4383DLE)",
+    )
+
+    # User input was solicited once
+    assert dummy_command.input.prompts == ["> "]
+
+
+def test_installer_identity_no_match(dummy_command):
+    """The list of possible installer identities includes non-app identities from the
+    same team."""
+    # get_identities is invoked twice - once with app identities, and once with all identities.
+    dummy_command.get_identities.side_effect = [
+        {
+            "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+            "EBD6F8903EC63C238B0384C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (83DLEZ2K43)",
+            "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
+        },
+        {
+            # The app identity that will be selected
+            "38EBD6F8903EC63C238B04C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+            # A different app identity
+            "EBD6F8903EC63C238B0384C1067833814CE47CA3": "Developer ID Application: Example Corp Ltd (83DLEZ2K43)",
+            # An installer identity that doesn't match the selected app identity
+            "1067833814CE4738EB4CD6F8903EC63C238B0CA3": "Developer ID Installer: Example Corp Ltd (83DLEZ2K43)",
+            # A different app identity
+            "11E77FB58F13F6108B38110D5D92233C58ED38C5": "iPhone Developer: Jane Smith (BXAH5H869S)",
+        },
+    ]
+
+    # As there are no viable installer certificates, an error is raised.
+    with pytest.raises(
+        BriefcaseCommandError,
+        match=r"No installer signing identities for team Z2K4383DLE could be found.",
+    ):
+        dummy_command.select_identity(
+            app_identity=SigningIdentity(
+                id="38EBD6F8903EC63C238B04C1067833814CE47CA3",
+                name="Developer ID Application: Example Corp Ltd (Z2K4383DLE)",
+            )
+        )
+
+    # User input was never solicited once
+    assert dummy_command.input.prompts == []
+
+
 @pytest.mark.parametrize("verbose", [True, False])
-def test_sign_file_adhoc_identity(dummy_command, verbose, tmp_path, capsys):
+def test_sign_file_adhoc_identity(
+    dummy_command,
+    adhoc_identity,
+    verbose,
+    tmp_path,
+    capsys,
+):
     """If an ad-hoc identity is used, the runtime option isn't used."""
     if verbose:
         dummy_command.logger.verbosity = LogLevel.VERBOSE
 
     # Sign the file with an ad-hoc identity
-    dummy_command.sign_file(tmp_path / "base_path/random.file", identity="-")
+    dummy_command.sign_file(tmp_path / "base_path/random.file", identity=adhoc_identity)
 
     # An attempt to codesign was made without the runtime option
     dummy_command.tools.subprocess.run.assert_has_calls(
@@ -241,7 +385,7 @@ def test_sign_file_adhoc_identity(dummy_command, verbose, tmp_path, capsys):
             sign_call(
                 tmp_path,
                 tmp_path / "base_path/random.file",
-                identity="-",
+                identity=adhoc_identity,
                 entitlements=False,
                 runtime=False,
             ),
@@ -255,7 +399,13 @@ def test_sign_file_adhoc_identity(dummy_command, verbose, tmp_path, capsys):
 
 
 @pytest.mark.parametrize("verbose", [True, False])
-def test_sign_file_entitlements(dummy_command, verbose, tmp_path, capsys):
+def test_sign_file_entitlements(
+    dummy_command,
+    sekrit_identity,
+    verbose,
+    tmp_path,
+    capsys,
+):
     """Entitlements can be included in a signing call."""
     if verbose:
         dummy_command.logger.verbosity = LogLevel.VERBOSE
@@ -263,7 +413,7 @@ def test_sign_file_entitlements(dummy_command, verbose, tmp_path, capsys):
     # Sign the file with an ad-hoc identity
     dummy_command.sign_file(
         tmp_path / "base_path/random.file",
-        identity="Sekrit identity (DEADBEEF)",
+        identity=sekrit_identity,
         entitlements=tmp_path
         / "base_path"
         / "build"
@@ -276,7 +426,11 @@ def test_sign_file_entitlements(dummy_command, verbose, tmp_path, capsys):
     # An attempt to codesign was made without the runtime option
     dummy_command.tools.subprocess.run.assert_has_calls(
         [
-            sign_call(tmp_path, tmp_path / "base_path/random.file"),
+            sign_call(
+                tmp_path,
+                tmp_path / "base_path/random.file",
+                identity=sekrit_identity,
+            ),
         ],
         any_order=False,
     )
@@ -287,92 +441,13 @@ def test_sign_file_entitlements(dummy_command, verbose, tmp_path, capsys):
 
 
 @pytest.mark.parametrize("verbose", [True, False])
-def test_sign_file_deep_sign(dummy_command, verbose, tmp_path, capsys):
-    """A file can be identified as needing a deep sign."""
-    if verbose:
-        dummy_command.logger.verbosity = LogLevel.VERBOSE
-
-    # First call raises the deep sign warning; second call succeeds
-    dummy_command.tools.subprocess.run.side_effect = mock_codesign(
-        [" code object is not signed at all", None]
-    )
-
-    # Sign the file
-    dummy_command.sign_file(
-        tmp_path / "base_path/random.file", identity="Sekrit identity (DEADBEEF)"
-    )
-
-    # 2 attempt to codesign was made; the second enabled the deep argument.
-    dummy_command.tools.subprocess.run.assert_has_calls(
-        [
-            sign_call(
-                tmp_path,
-                tmp_path / "base_path/random.file",
-                entitlements=False,
-            ),
-            sign_call(
-                tmp_path,
-                tmp_path / "base_path/random.file",
-                entitlements=False,
-                deep=True,
-            ),
-        ],
-        any_order=False,
-    )
-
-    output = capsys.readouterr().out
-    if verbose:
-        # The console includes a warning about the attempt to deep sign
-        assert "... random.file requires a deep sign; retrying\n" in output
-
-    # Output only happens if in debug mode
-    assert len(output.strip("\n").split("\n")) == (2 if verbose else 1)
-
-
-@pytest.mark.parametrize("verbose", [True, False])
-def test_sign_file_deep_sign_failure(dummy_command, verbose, tmp_path, capsys):
-    """If deep signing fails, an error is raised."""
-    if verbose:
-        dummy_command.logger.verbosity = LogLevel.VERBOSE
-
-    # First invocation raises the deep sign error; second invocation raises some other error
-    dummy_command.tools.subprocess.run.side_effect = mock_codesign(
-        [
-            " code object is not signed at all",
-            " something went wrong!",
-        ]
-    )
-
-    # Sign the file
-    with pytest.raises(BriefcaseCommandError, match="Unable to deep code sign "):
-        dummy_command.sign_file(
-            tmp_path / "base_path/random.file",
-            identity="Sekrit identity (DEADBEEF)",
-        )
-
-    # An attempt to codesign was made
-    dummy_command.tools.subprocess.run.assert_has_calls(
-        [
-            sign_call(
-                tmp_path,
-                tmp_path / "base_path/random.file",
-                entitlements=False,
-            ),
-        ],
-        any_order=False,
-    )
-
-    output = capsys.readouterr().out
-    if verbose:
-        # The console includes a warning about the attempt to deep sign
-        assert "... random.file requires a deep sign; retrying\n" in output
-
-    # Output only happens if in debug mode
-    assert len(output.strip("\n").split("\n")) == (2 if verbose else 1)
-
-
-@pytest.mark.parametrize("verbose", [True, False])
-def test_sign_file_unsupported_format(dummy_command, verbose, tmp_path, capsys):
+def test_sign_file_unsupported_format(
+    dummy_command,
+    sekrit_identity,
+    verbose,
+    tmp_path,
+    capsys,
+):
     """If codesign reports an unsupported format, the signing attempt is ignored with a
     warning."""
     if verbose:
@@ -386,7 +461,7 @@ def test_sign_file_unsupported_format(dummy_command, verbose, tmp_path, capsys):
     # Sign the file
     dummy_command.sign_file(
         tmp_path / "base_path/random.file",
-        identity="Sekrit identity (DEADBEEF)",
+        identity=sekrit_identity,
     )
 
     # An attempt to codesign was made
@@ -395,6 +470,7 @@ def test_sign_file_unsupported_format(dummy_command, verbose, tmp_path, capsys):
             sign_call(
                 tmp_path,
                 tmp_path / "base_path/random.file",
+                identity=sekrit_identity,
                 entitlements=False,
             ),
         ],
@@ -411,7 +487,13 @@ def test_sign_file_unsupported_format(dummy_command, verbose, tmp_path, capsys):
 
 
 @pytest.mark.parametrize("verbose", [True, False])
-def test_sign_file_unknown_bundle_format(dummy_command, verbose, tmp_path, capsys):
+def test_sign_file_unknown_bundle_format(
+    dummy_command,
+    sekrit_identity,
+    verbose,
+    tmp_path,
+    capsys,
+):
     """If a folder happens to have a .framework extension, the signing attempt is
     ignored with a warning."""
     if verbose:
@@ -425,7 +507,7 @@ def test_sign_file_unknown_bundle_format(dummy_command, verbose, tmp_path, capsy
     # Sign the file
     dummy_command.sign_file(
         tmp_path / "base_path/random.file",
-        identity="Sekrit identity (DEADBEEF)",
+        identity=sekrit_identity,
     )
 
     # An attempt to codesign was made
@@ -434,6 +516,7 @@ def test_sign_file_unknown_bundle_format(dummy_command, verbose, tmp_path, capsy
             sign_call(
                 tmp_path,
                 tmp_path / "base_path/random.file",
+                identity=sekrit_identity,
                 entitlements=False,
             ),
         ],
@@ -450,7 +533,13 @@ def test_sign_file_unknown_bundle_format(dummy_command, verbose, tmp_path, capsy
 
 
 @pytest.mark.parametrize("verbose", [True, False])
-def test_sign_file_unknown_error(dummy_command, verbose, tmp_path, capsys):
+def test_sign_file_unknown_error(
+    dummy_command,
+    sekrit_identity,
+    verbose,
+    tmp_path,
+    capsys,
+):
     """Any other codesigning error raises an error."""
     if verbose:
         dummy_command.logger.verbosity = LogLevel.VERBOSE
@@ -461,7 +550,7 @@ def test_sign_file_unknown_error(dummy_command, verbose, tmp_path, capsys):
     with pytest.raises(BriefcaseCommandError, match="Unable to code sign "):
         dummy_command.sign_file(
             tmp_path / "base_path/random.file",
-            identity="Sekrit identity (DEADBEEF)",
+            identity=sekrit_identity,
         )
 
     # An attempt to codesign was made
@@ -470,6 +559,7 @@ def test_sign_file_unknown_error(dummy_command, verbose, tmp_path, capsys):
             sign_call(
                 tmp_path,
                 tmp_path / "base_path/random.file",
+                identity=sekrit_identity,
                 entitlements=False,
             ),
         ],
@@ -481,15 +571,27 @@ def test_sign_file_unknown_error(dummy_command, verbose, tmp_path, capsys):
     assert len(output.strip("\n").split("\n")) == 1
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Can't test macOS codesigning on Windows",
+)
 @pytest.mark.parametrize("verbose", [True, False])
-def test_sign_app(dummy_command, first_app_with_binaries, verbose, tmp_path, capsys):
+def test_sign_app(
+    dummy_command,
+    sekrit_identity,
+    first_app_with_binaries,
+    verbose,
+    tmp_path,
+    capsys,
+):
     """An app bundle can be signed."""
     if verbose:
         dummy_command.logger.verbosity = LogLevel.VERBOSE
 
     # Sign the app
     dummy_command.sign_app(
-        first_app_with_binaries, identity="Sekrit identity (DEADBEEF)"
+        first_app_with_binaries,
+        identity=sekrit_identity,
     )
 
     # A request has been made to sign all the so and dylib files
@@ -511,22 +613,65 @@ def test_sign_app(dummy_command, first_app_with_binaries, verbose, tmp_path, cap
     )
     lib_path = app_path / "Contents/Resources/app_packages"
     frameworks_path = app_path / "Contents/Frameworks"
+
+    assert len(dummy_command.tools.subprocess.run.mock_calls) == 11
     dummy_command.tools.subprocess.run.assert_has_calls(
         [
-            sign_call(tmp_path, lib_path / "subfolder/second_so.so"),
-            sign_call(tmp_path, lib_path / "subfolder/second_dylib.dylib"),
-            sign_call(tmp_path, lib_path / "special.binary"),
-            sign_call(tmp_path, lib_path / "other_binary"),
-            sign_call(tmp_path, lib_path / "first_so.so"),
-            sign_call(tmp_path, lib_path / "first_dylib.dylib"),
-            sign_call(tmp_path, lib_path / "Extras.app/Contents/MacOS/Extras"),
-            sign_call(tmp_path, lib_path / "Extras.app"),
             sign_call(
                 tmp_path,
-                frameworks_path / "Extras.framework/Resources/extras.dylib",
+                lib_path / "subfolder/second_so.so",
+                identity=sekrit_identity,
             ),
-            sign_call(tmp_path, frameworks_path / "Extras.framework"),
-            sign_call(tmp_path, app_path),
+            sign_call(
+                tmp_path,
+                lib_path / "subfolder/second_dylib.dylib",
+                identity=sekrit_identity,
+            ),
+            sign_call(
+                tmp_path,
+                lib_path / "special.binary",
+                identity=sekrit_identity,
+            ),
+            sign_call(
+                tmp_path,
+                lib_path / "other_binary",
+                identity=sekrit_identity,
+            ),
+            sign_call(
+                tmp_path,
+                lib_path / "first_so.so",
+                identity=sekrit_identity,
+            ),
+            sign_call(
+                tmp_path,
+                lib_path / "first_dylib.dylib",
+                identity=sekrit_identity,
+            ),
+            sign_call(
+                tmp_path,
+                lib_path / "Extras.app/Contents/MacOS/Extras",
+                identity=sekrit_identity,
+            ),
+            sign_call(
+                tmp_path,
+                lib_path / "Extras.app",
+                identity=sekrit_identity,
+            ),
+            sign_call(
+                tmp_path,
+                frameworks_path / "Extras.framework/Versions/1.2/libs/extras.dylib",
+                identity=sekrit_identity,
+            ),
+            sign_call(
+                tmp_path,
+                frameworks_path / "Extras.framework",
+                identity=sekrit_identity,
+            ),
+            sign_call(
+                tmp_path,
+                app_path,
+                identity=sekrit_identity,
+            ),
         ],
         any_order=True,
     )
@@ -547,18 +692,21 @@ def test_sign_app(dummy_command, first_app_with_binaries, verbose, tmp_path, cap
 
     # Output only happens if in debug mode.
     output = capsys.readouterr().out
-    if sys.platform == "win32":
-        # In practice, we won't ever actually run signing on win32; but to ensure test
-        # coverage we need to. However, win32 doesn't handle executable permissions
-        # the same as linux/unix, `unknown.binary` is identified as a signing target.
-        # We ignore this discrepancy for testing purposes.
-        assert len(output.strip("\n").split("\n")) == (12 if verbose else 1)
-    else:
-        assert len(output.strip("\n").split("\n")) == (11 if verbose else 1)
+    assert len(output.strip("\n").split("\n")) == (11 if verbose else 1)
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Can't test macOS codesigning on Windows",
+)
 @pytest.mark.parametrize("verbose", [True, False])
-def test_sign_app_with_failure(dummy_command, first_app_with_binaries, verbose, capsys):
+def test_sign_app_with_failure(
+    dummy_command,
+    sekrit_identity,
+    first_app_with_binaries,
+    verbose,
+    capsys,
+):
     """If signing a single file in the app fails, the error is surfaced."""
     if verbose:
         dummy_command.logger.verbosity = LogLevel.VERBOSE
@@ -578,7 +726,8 @@ def test_sign_app_with_failure(dummy_command, first_app_with_binaries, verbose, 
         BriefcaseCommandError, match=r"Unable to code sign .*first_dylib\.dylib"
     ):
         dummy_command.sign_app(
-            first_app_with_binaries, identity="Sekrit identity (DEADBEEF)"
+            first_app_with_binaries,
+            identity=sekrit_identity,
         )
 
     # There has been at least 1 call to sign files. We can't know how many are
@@ -587,11 +736,4 @@ def test_sign_app_with_failure(dummy_command, first_app_with_binaries, verbose, 
 
     # Output only happens if in debug mode.
     output = capsys.readouterr().out
-    if sys.platform == "win32":
-        # In practice, we won't ever actually run signing on win32; but to ensure test
-        # coverage we need to. However, win32 doesn't handle executable permissions
-        # the same as linux/unix, `unknown.binary` is identified as a signing target.
-        # We ignore this discrepancy for testing purposes.
-        assert len(output.strip("\n").split("\n")) == (7 if verbose else 1)
-    else:
-        assert len(output.strip("\n").split("\n")) == (6 if verbose else 1)
+    assert len(output.strip("\n").split("\n")) == (8 if verbose else 1)

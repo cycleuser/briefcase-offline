@@ -3,24 +3,24 @@ from __future__ import annotations
 import hashlib
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
-
-from packaging.version import Version
 
 import briefcase
 from briefcase.config import AppConfig
 from briefcase.exceptions import (
     BriefcaseCommandError,
+    InvalidStubBinary,
     InvalidSupportPackage,
     MissingAppSources,
     MissingNetworkResourceError,
+    MissingStubBinary,
     MissingSupportPackage,
     RequirementsInstallError,
-    TemplateUnsupportedVersion,
     UnsupportedPlatform,
 )
 from briefcase.integrations.git import Git
@@ -88,19 +88,35 @@ class CreateCommand(BaseCommand):
     hidden_app_properties = {"permission"}
 
     @property
-    def app_template_url(self):
+    def app_template_url(self) -> str:
         """The URL for a cookiecutter repository to use when creating apps."""
         return f"https://github.com/beeware/briefcase-{self.platform}-{self.output_format}-template.git"
 
-    def support_package_filename(self, support_revision):
+    def support_package_filename(self, support_revision: str) -> str:
         """The query arguments to use in a support package query request."""
         return f"Python-{self.python_version_tag}-{self.platform}-support.b{support_revision}.tar.gz"
 
-    def support_package_url(self, support_revision):
+    def support_package_url(self, support_revision: str) -> str:
         """The URL of the support package to use for apps of this type."""
         return (
-            f"https://briefcase-support.s3.amazonaws.com/python/{self.python_version_tag}/{self.platform}/"
-            + self.support_package_filename(support_revision)
+            "https://briefcase-support.s3.amazonaws.com/python/"
+            f"{self.python_version_tag}/"
+            f"{self.platform}/"
+            f"{self.support_package_filename(support_revision)}"
+        )
+
+    def stub_binary_filename(self, support_revision: str, is_console_app: bool) -> str:
+        """The filename for the stub binary."""
+        stub_type = "Console" if is_console_app else "GUI"
+        return f"{stub_type}-Stub-{self.python_version_tag}-b{support_revision}.zip"
+
+    def stub_binary_url(self, support_revision: str, is_console_app: bool) -> str:
+        """The URL of the stub binary to use for apps of this type."""
+        return (
+            "https://briefcase-support.s3.amazonaws.com/python/"
+            f"{self.python_version_tag}/"
+            f"{self.platform}/"
+            f"{self.stub_binary_filename(support_revision, is_console_app)}"
         )
 
     def icon_targets(self, app: AppConfig):
@@ -123,27 +139,6 @@ class CreateCommand(BaseCommand):
             icon_targets = {}
 
         return icon_targets
-
-    def splash_image_targets(self, app: AppConfig):
-        """Obtain the dictionary of splash image targets that the template requires.
-
-        :param app: The config object for the app
-        :return: A dictionary of splash images that the template supports. The keys of
-            the dictionary are the size of the splash images.
-        """
-        # If the template specifies no splash images, return an empty dictionary.
-        # If the template specifies a single splash image without a size specification,
-        #   return a dictionary with a single ``None`` key.
-        # Otherwise, return the full size-keyed dictionary.
-        try:
-            splash_targets = self.path_index(app, "splash")
-            # Convert string-specified splash images into an "unknown size" icon form
-            if isinstance(splash_targets, str):
-                splash_targets = {None: splash_targets}
-        except KeyError:
-            splash_targets = {}
-
-        return splash_targets
 
     def document_type_icon_targets(self, app: AppConfig):
         """Obtain the dictionary of document type icon targets that the template
@@ -215,18 +210,6 @@ class CreateCommand(BaseCommand):
         """
         # If the app config doesn't explicitly define a template,
         # use a default template.
-        if app.template is None:
-            template = self.app_template_url
-        else:
-            template = app.template
-
-        # If the app config doesn't explicitly define a template branch,
-        # use the branch derived from the Briefcase version
-        version = Version(briefcase.__version__)
-        if app.template_branch is None:
-            template_branch = f"v{version.base_version}"
-        else:
-            template_branch = app.template_branch
 
         # Construct a template context from the app configuration.
         extra_context = {
@@ -249,8 +232,6 @@ class CreateCommand(BaseCommand):
                 "python_version": platform.python_version(),
                 # The host architecture
                 "host_arch": self.tools.host_arch,
-                # The Briefcase version
-                "briefcase_version": briefcase.__version__,
                 # Transformations of explicit properties into useful forms
                 "class_name": app.class_name,
                 "module_name": app.module_name,
@@ -272,34 +253,12 @@ class CreateCommand(BaseCommand):
         output_path = self.bundle_path(app).parent
         output_path.mkdir(parents=True, exist_ok=True)
 
-        try:
-            self.logger.info(
-                f"Using app template: {template}, branch {template_branch}"
-            )
-            self.generate_template(
-                template=template,
-                branch=template_branch,
-                output_path=output_path,
-                extra_context=extra_context,
-            )
-        except TemplateUnsupportedVersion:
-            # If we're on a development branch, and the template branch was *not*
-            # provided explicitly, we can use a fallback development template.
-            # Otherwise, re-raise the exception about the unsupported template version.
-            if version.dev is not None and app.template_branch is None:
-                # Development branches can use the main template.
-                self.logger.info(
-                    f"Template branch {template_branch} not found; falling back to development template"
-                )
-                template_branch = "main"
-                self.generate_template(
-                    template=template,
-                    branch=template_branch,
-                    output_path=output_path,
-                    extra_context=extra_context,
-                )
-            else:
-                raise
+        self.generate_template(
+            template=app.template if app.template else self.app_template_url,
+            branch=app.template_branch,
+            output_path=output_path,
+            extra_context=extra_context,
+        )
 
     def _unpack_support_package(self, support_file_path, support_path):
         """Unpack a support package into a specific location.
@@ -307,22 +266,12 @@ class CreateCommand(BaseCommand):
         :param support_file_path: The path to the support file to be unpacked.
         :param support_path: The path where support files should be unpacked.
         """
-        # Additional protections for unpacking tar files were introduced in Python 3.12.
-        # This enables the behavior that will be the default in Python 3.14.
-        # However, the protections can only be enabled for tar files...not zip files.
-        is_zip = support_file_path.name.endswith("zip")
-        if sys.version_info >= (3, 12) and not is_zip:  # pragma: no-cover-if-lt-py312
-            tarfile_kwargs = {"filter": "data"}
-        else:
-            tarfile_kwargs = {}
-
         try:
             with self.input.wait_bar("Unpacking support package..."):
                 support_path.mkdir(parents=True, exist_ok=True)
-                self.tools.shutil.unpack_archive(
+                self.tools.file.unpack_archive(
                     support_file_path,
                     extract_dir=support_path,
-                    **tarfile_kwargs,
                 )
         except (shutil.ReadError, EOFError) as e:
             raise InvalidSupportPackage(support_file_path) from e
@@ -423,7 +372,7 @@ class CreateCommand(BaseCommand):
 
                 # Download the support file, caching the result
                 # in the user's briefcase support cache directory.
-                return self.tools.download.file(
+                return self.tools.file.download(
                     url=support_package_url,
                     download_path=download_path,
                     role="support package",
@@ -442,11 +391,121 @@ class CreateCommand(BaseCommand):
                     is_32bit=self.tools.is_32bit_python,
                 ) from e
 
+    def cleanup_stub_binary(self, app: AppConfig):
+        """Clean up an existing application support package.
+
+        :param app: The config object for the app
+        """
+        with self.input.wait_bar("Removing existing stub binary..."):
+            self.binary_executable_path(app).unlink(missing_ok=True)
+            self.unbuilt_executable_path(app).unlink(missing_ok=True)
+
+    def install_stub_binary(self, app: AppConfig):
+        """Install the application stub binary into the "unbuilt" location.
+
+        :param app: The config object for the app
+        """
+        unbuilt_executable_path = self.unbuilt_executable_path(app)
+        stub_binary_path = self._download_stub_binary(app)
+
+        with self.input.wait_bar("Installing stub binary..."):
+            # Ensure the folder for the stub binary exists
+            unbuilt_executable_path.parent.mkdir(exist_ok=True, parents=True)
+
+            # Install the stub binary into the unbuilt location.
+            # Allow for both raw and compressed artefacts.
+            try:
+                if self.tools.file.is_archive(stub_binary_path):
+                    self.tools.file.unpack_archive(
+                        stub_binary_path,
+                        extract_dir=unbuilt_executable_path.parent,
+                    )
+                elif stub_binary_path.is_file():
+                    self.tools.shutil.copyfile(
+                        stub_binary_path, unbuilt_executable_path
+                    )
+                else:
+                    raise InvalidStubBinary(stub_binary_path)
+            except (shutil.ReadError, EOFError, OSError) as e:
+                raise InvalidStubBinary(stub_binary_path) from e
+            else:
+                # Ensure the binary is executable
+                self.tools.os.chmod(unbuilt_executable_path, 0o755)
+
+    def _download_stub_binary(self, app: AppConfig) -> Path:
+        try:
+            # Work out if the app defines a custom override for
+            # the support package URL.
+            try:
+                stub_binary_url = app.stub_binary
+                custom_stub_binary = True
+                self.logger.info(f"Using custom stub binary {stub_binary_url}")
+                try:
+                    # If the app has a custom stub binary *and* a support revision,
+                    # that's an error.
+                    app.stub_binary_revision
+                    self.logger.warning(
+                        "App specifies both a stub binary and a stub binary revision; "
+                        "stub binary revision will be ignored."
+                    )
+                except AttributeError:
+                    pass
+            except AttributeError:
+                # If the app specifies a support revision, use it; otherwise, use the
+                # support revision named by the template. This value *must* exist, as
+                # stub binary handling won't be triggered at all unless it is present.
+                try:
+                    stub_binary_revision = app.stub_binary_revision
+                except AttributeError:
+                    stub_binary_revision = self.stub_binary_revision(app)
+
+                stub_binary_url = self.stub_binary_url(
+                    stub_binary_revision, app.console_app
+                )
+                custom_stub_binary = False
+                self.logger.info(f"Using stub binary {stub_binary_url}")
+
+            if stub_binary_url.startswith(("https://", "http://")):
+                if custom_stub_binary:
+                    # If the support package is custom, cache it using a hash of
+                    # the download URL. This is needed to differentiate to support
+                    # packages with the same filename, served at different URLs.
+                    # (or a custom package that collides with an official package name)
+                    download_path = (
+                        self.data_path
+                        / "stub"
+                        / hashlib.sha256(stub_binary_url.encode("utf-8")).hexdigest()
+                    )
+                else:
+                    download_path = self.data_path / "stub"
+
+                # Download the stub binary, caching the result
+                # in the user's briefcase stub cache directory.
+                return self.tools.file.download(
+                    url=stub_binary_url,
+                    download_path=download_path,
+                    role="stub binary",
+                )
+            else:
+                return Path(stub_binary_url)
+        except MissingNetworkResourceError as e:
+            # If there is a custom support package, report the missing resource as-is.
+            if custom_stub_binary:
+                raise
+            else:
+                raise MissingStubBinary(
+                    python_version_tag=self.python_version_tag,
+                    platform=self.platform,
+                    host_arch=self.tools.host_arch,
+                    is_32bit=self.tools.is_32bit_python,
+                ) from e
+
     def _write_requirements_file(
         self,
         app: AppConfig,
         requires: list[str],
         requirements_path: Path,
+        requirement_installer_args_path: Path | None,
     ):
         """Configure application requirements by writing a requirements.txt file.
 
@@ -454,20 +513,33 @@ class CreateCommand(BaseCommand):
         :param requires: The full list of requirements
         :param requirements_path: The full path to a requirements.txt file that will be
             written.
+        :param requirement_installer_args_path: The full path to where newline
+            delimited additional requirement installer argumentss should be written if
+            the template supports it.
         """
 
         with self.input.wait_bar("Writing requirements file..."):
             with requirements_path.open("w", encoding="utf-8") as f:
+                # Add timestamp so build systems (such as Gradle) detect a change
+                # in the file and perform a re-installation of all requirements.
+                f.write(f"# Generated {datetime.now()}\n")
+
                 if requires:
                     for requirement in requires:
                         # If the requirement is a local path, convert it to
                         # absolute, because Flatpak moves the requirements file
                         # to a different place before using it.
-                        if _is_local_requirement(requirement):
+                        if _is_local_path(requirement):
                             # We use os.path.abspath() rather than Path.resolve()
                             # because we *don't* want Path's symlink resolving behavior.
                             requirement = os.path.abspath(self.base_path / requirement)
                         f.write(f"{requirement}\n")
+
+            if requirement_installer_args_path:
+                pip_args = "\n".join(self._extra_pip_args(app))
+                requirement_installer_args_path.write_text(
+                    f"{pip_args}\n", encoding="utf-8"
+                )
 
     def _pip_requires(self, app: AppConfig, requires: list[str]):
         """Convert the list of requirements to be passed to pip into its final form.
@@ -484,7 +556,17 @@ class CreateCommand(BaseCommand):
         :param app: The app configuration
         :returns: A list of additional arguments
         """
-        return []
+        args: list[str] = []
+        for argument in app.requirement_installer_args:
+            to_append = argument
+            if relative_path_matcher.match(argument) and _is_local_path(argument):
+                abs_path = os.path.abspath(self.base_path / argument)
+                if Path(abs_path).exists():
+                    to_append = abs_path
+
+            args.append(to_append)
+
+        return args
 
     def _pip_install(
         self,
@@ -540,6 +622,7 @@ class CreateCommand(BaseCommand):
         requires: list[str],
         app_packages_path: Path,
         progress_message: str = "Installing app requirements...",
+        pip_args: list[str] | None = None,
         pip_kwargs: dict[str, str] | None = None,
     ):
         """Install requirements for the app with pip.
@@ -549,6 +632,7 @@ class CreateCommand(BaseCommand):
         :param app_packages_path: The full path of the app_packages folder into which
             requirements should be installed.
         :param progress_message: The waitbar progress message to display to the user.
+        :param pip_args: Any additional command line arguments to use when invoking pip.
         :param pip_kwargs: Any additional keyword arguments to pass to the subprocess
             when invoking pip.
         """
@@ -563,7 +647,10 @@ class CreateCommand(BaseCommand):
                 self._pip_install(
                     app,
                     app_packages_path=app_packages_path,
-                    pip_args=self._pip_requires(app, requires),
+                    pip_args=(
+                        ([] if pip_args is None else pip_args)
+                        + self._pip_requires(app, requires)
+                    ),
                     **(pip_kwargs if pip_kwargs else {}),
                 )
         else:
@@ -592,8 +679,21 @@ class CreateCommand(BaseCommand):
 
         try:
             requirements_path = self.app_requirements_path(app)
-            self._write_requirements_file(app, requires, requirements_path)
         except KeyError:
+            requirements_path = None
+
+        try:
+            requirement_installer_args_path = self.app_requirement_installer_args_path(
+                app
+            )
+        except KeyError:
+            requirement_installer_args_path = None
+
+        if requirements_path:
+            self._write_requirements_file(
+                app, requires, requirements_path, requirement_installer_args_path
+            )
+        else:
             try:
                 app_packages_path = self.app_packages_path(app)
                 self._install_app_requirements(app, requires, app_packages_path)
@@ -743,29 +843,16 @@ class CreateCommand(BaseCommand):
                     target=self.bundle_path(app) / targets,
                 )
 
-        for variant_or_size, targets in self.splash_image_targets(app).items():
-            try:
-                # Treat the targets as a dictionary of sizes;
-                # if there's no `items`, then it's a splash without variants
-                for size, target in targets.items():
-                    self.install_image(
-                        "splash image",
-                        source=app.splash,
-                        variant=variant_or_size,
-                        size=size,
-                        target=self.bundle_path(app) / target,
-                    )
-            except AttributeError:
-                # Either a single variant, or a single size.
-                self.install_image(
-                    "splash image",
-                    source=app.splash,
-                    variant=None,
-                    size=variant_or_size,
-                    target=self.bundle_path(app) / targets,
-                )
+        # Briefcase v0.3.18 - splash screens deprecated.
+        if getattr(app, "splash", None):
+            self.logger.warning()
+            self.logger.warning(
+                "Splash screens are now configured based on the icon. "
+                "The splash configuration will be ignored."
+            )
 
         for extension, doctype in self.document_type_icon_targets(app).items():
+            self.logger.info()
             for size, target in doctype.items():
                 self.install_image(
                     f"icon for .{extension} documents",
@@ -804,7 +891,7 @@ class CreateCommand(BaseCommand):
                 # on the file system.
                 for path in self.bundle_path(app).glob(glob):
                     relative_path = path.relative_to(self.bundle_path(app))
-                    if path.is_dir():
+                    if path.is_dir() and not path.is_symlink():
                         self.logger.verbose(f"Removing directory {relative_path}")
                         self.tools.shutil.rmtree(path)
                     else:
@@ -839,6 +926,17 @@ class CreateCommand(BaseCommand):
 
         self.logger.info("Installing support package...", prefix=app.app_name)
         self.install_app_support_package(app=app)
+
+        try:
+            # If the platform uses a stub binary, the template will define a binary
+            # revision. If this template configuration item doesn't exist, no stub
+            # binary is required.
+            self.stub_binary_revision(app)
+        except KeyError:
+            pass
+        else:
+            self.logger.info("Installing stub binary...", prefix=app.app_name)
+            self.install_stub_binary(app=app)
 
         # Verify the app after the app template and support package
         # are in place since the app tools may be dependent on them.
@@ -914,15 +1012,18 @@ def _has_url(requirement):
     )
 
 
-def _is_local_requirement(requirement):
-    """Determine if the requirement is a local file path.
+def _is_local_path(reference):
+    """Determine if the reference is a local file path.
 
-    :param requirement: The requirement to check
-    :returns: True if the requirement is a local file path
+    :param reference: The reference to check
+    :returns: True if the reference is a local file path
     """
-    # Windows allows both / and \ as a path separator in requirements.
+    # Windows allows both / and \ as a path separator in references.
     separators = [os.sep]
     if os.altsep:
         separators.append(os.altsep)
 
-    return any(sep in requirement for sep in separators) and (not _has_url(requirement))
+    return any(sep in reference for sep in separators) and (not _has_url(reference))
+
+
+relative_path_matcher = re.compile(r"^\.{1,2}[\\/]")

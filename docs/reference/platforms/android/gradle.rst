@@ -37,7 +37,7 @@ If you have an existing install of the Android SDK, it will be used by Briefcase
 if the ``ANDROID_HOME`` environment variable is set. If ``ANDROID_HOME`` is not
 present in the environment, Briefcase will honor the deprecated
 ``ANDROID_SDK_ROOT`` environment variable. Additionally, an existing SDK install
-must have version 9.0 of Command-line Tools installed; this version can be
+must have version 12.0 of Command-line Tools installed; this version can be
 installed in the SDK Manager in Android Studio.
 
 Packaging format
@@ -53,60 +53,46 @@ Briefcase supports three packaging formats for an Android app:
 Icon format
 ===========
 
-Android projects use ``.png`` format icons, in round and square variants. An
-application must provide the icons in the following sizes, for 2 variants:
+Android projects use ``.png`` format icons, in round, square and adaptive variants. An
+application must provide the icons in the following sizes, for 3 variants:
 
 * ``round``:
 
-  * 48px
-  * 72px
-  * 96px
-  * 144px
-  * 192px
+  * 48px (``mdpi``; baseline resolution)
+  * 72px (``hdpi``; 1.5x scale)
+  * 96px (``xhdpi``; 2x scale)
+  * 144px (``xxhdpi``; 3x scale)
+  * 192px (``xxxhdpi``; 4x scale)
 
 * ``square``:
 
-  * 48px
-  * 72px
-  * 96px
-  * 144px
-  * 192px
+  * 48px (``mdpi``; baseline resolution)
+  * 72px (``hdpi``; 1.5x scale)
+  * 96px (``xhdpi``; 2x scale)
+  * 144px (``xxhdpi``; 3x scale)
+  * 192px (``xxxhdpi``; 4x scale)
+  * 320px (``mdpi``; baseline resolution for splash screen)
+  * 480px (``hdpi``; 1.5x scale for splash screen)
+  * 640px (``xhdpi``; 2x scale for splash screen)
+  * 960px (``xxhdpi``; 3x scale for splash screen)
+  * 1280px (``xxxhdpi``; 4x scale for splash screen)
 
-Splash Image format
-===================
+* ``adaptive``:
 
-Android projects use ``.png`` format splash screen images. A splash screen
-should be a square image with a transparent background. It must be specified
-in a range of sizes and variants, to suit different possible device sizes
-and device display densities:
+  * 108px (``mdpi``; baseline resolution; 66px drawable area)
+  * 162px (``hdpi``; 1.5x scale; 99px drawable area)
+  * 216px (``xhdpi``; 2x scale; 132px drawable area)
+  * 324px (``xxhdpi``; 3x scale; 198px drawable area)
+  * 432px (``xxxhdpi``; 4x scale; 264px drawable area)
 
-* ``normal`` (typical phones; up to 480 density-independent pixels):
+The ``round`` and ``square`` icons should include their background color in the image.
+The ``adaptive`` icons should have a transparent background; the icon image should be
+centered in the overall image, and should not exceed the drawable area. The background
+color of the adaptive icon will be the value specified with ``splash_background_color``.
 
-  * 320px
-  * 480px (``hdpi``)
-  * 640px (``xhdpi``)
-  * 1280px (``xxxhdpi``)
-
-* ``large`` (large format phones, or phone-tablet "phablet" hybrids; up to
-  720 density-independent pixels):
-
-  * 480px
-  * 720px (``hdpi``)
-  * 960px (``xhdpi``)
-  * 1920px (``xxxhdpi``)
-
-* ``xlarge`` (tablets; larger than 720 density-independent pixels)
-
-  * 720px
-  * 1080px (``hdpi``)
-  * 1440px (``xhdpi``)
-  * 2880px (``xxxhdpi``)
-
-Consult `the Android documentation
-<https://developer.android.com/guide/topics/large-screens/support-different-screen-sizes>`__
-for more details on devices, sizes, and display densities. `This list of common
-devices with their sizes and DPI <https://m2.material.io/resources/devices/>`__
-may also be helpful.
+The icon will also be used to populate the splash screen. You can specify a
+background color for the splash screen using the ``splash_background_color``
+configuration setting.
 
 Android projects do not support installer images.
 
@@ -146,9 +132,9 @@ The device or emulator to target. Can be specified as:
 * a JSON dictionary specifying the properties of a device that will be created.
   This dictionary must have, at a minimum, an AVD name:
 
-.. code-block:: console
+  .. code-block:: console
 
-     $ briefcase run -d '{"avd":"new-device"}'
+       $ briefcase run -d '{"avd":"new-device"}'
 
   You may also specify:
 
@@ -394,3 +380,10 @@ recipes for building the packages that are stored in the `secondary package repo
 can be submitted as pull requests. Or, if you have a particular package that you'd like
 us to support, please visit the `issue tracker
 <https://github.com/chaquo/chaquopy/issues>`__ and provide details about that package.
+
+While it is possible to use `briefcase package android` to produce an APK or AAB
+file for distribution, the file is *not* usable as-is. It must be signed
+regardless of whether you're distributing your app through the Play Store, or
+via loading the APK directly. For details on how to manually sign your code,
+see the instructions on `signing an Android App Bundle
+<https://briefcase.readthedocs.io/en/stable/how-to/publishing/android.html#sign-the-android-app-bundle>`__.```

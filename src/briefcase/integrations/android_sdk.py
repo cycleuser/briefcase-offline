@@ -6,7 +6,6 @@ import re
 import shlex
 import shutil
 import subprocess
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -48,10 +47,10 @@ class AndroidSDK(ManagedTool):
     name = "android_sdk"
     full_name = "Android SDK"
 
-    # Latest version for Command-Line Tools download as of August 2023
-    # **Be sure the android.rst docs stay in sync with version updates here**
-    SDK_MANAGER_DOWNLOAD_VER = "9477386"
-    SDK_MANAGER_VER = "9.0"
+    # Latest version for Command-Line Tools download as of May 2024
+    # **Be sure the gradle.rst docs stay in sync with version updates here**
+    SDK_MANAGER_DOWNLOAD_VER = "11076708"
+    SDK_MANAGER_VER = "12.0"
 
     def __init__(self, tools: ToolCache, root_path: Path):
         super().__init__(tools=tools)
@@ -316,7 +315,7 @@ class AndroidSDK(ManagedTool):
 
     {sdk_root_env}
 
-    doesn't appear to contain an Android SDK.
+    doesn't appear to contain an Android SDK with the Command-line Tools installed.
 
     If {sdk_source_env} is an Android SDK, ensure it is the root directory
     of the Android SDK instance such that
@@ -387,7 +386,7 @@ class AndroidSDK(ManagedTool):
 
     def install(self):
         """Download and install the Android SDK."""
-        cmdline_tools_zip_path = self.tools.download.file(
+        cmdline_tools_zip_path = self.tools.file.download(
             url=self.cmdline_tools_url,
             download_path=self.tools.base_path,
             role="Android SDK Command-Line Tools",
@@ -408,7 +407,7 @@ class AndroidSDK(ManagedTool):
         ):
             self.cmdline_tools_path.parent.mkdir(parents=True, exist_ok=True)
             try:
-                self.tools.shutil.unpack_archive(
+                self.tools.file.unpack_archive(
                     cmdline_tools_zip_path, extract_dir=self.cmdline_tools_path.parent
                 )
             except (shutil.ReadError, EOFError) as e:
@@ -800,7 +799,7 @@ connection.
             f"artwork/resources/device-art-resources/{skin}.tar.gz"
         )
 
-        skin_tgz_path = self.tools.download.file(
+        skin_tgz_path = self.tools.file.download(
             url=skin_url,
             download_path=self.root_path,
             role=f"{skin} device skin",
@@ -809,10 +808,9 @@ connection.
         # Unpack skin archive
         with self.tools.input.wait_bar("Installing device skin..."):
             try:
-                self.tools.shutil.unpack_archive(
+                self.tools.file.unpack_archive(
                     skin_tgz_path,
                     extract_dir=skin_path,
-                    **({"filter": "data"} if sys.version_info >= (3, 12) else {}),
                 )
             except (shutil.ReadError, EOFError) as e:
                 raise BriefcaseCommandError(
@@ -1204,7 +1202,13 @@ In future, you can specify this device by running:
                         "--device",
                         device_type,
                     ],
-                    env=self.env,
+                    # Ensure XDG_CONFIG_HOME is not set so avdmanager uses the default
+                    # location (i.e. ~/.android) because the emulator does not respect
+                    # XDG_CONFIG_HOME and will not be able to find the AVD to run it.
+                    env={
+                        **self.env,
+                        **{"XDG_CONFIG_HOME": None},
+                    },
                 )
             except subprocess.CalledProcessError as e:
                 raise BriefcaseCommandError("Unable to create Android emulator") from e

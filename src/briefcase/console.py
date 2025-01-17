@@ -5,14 +5,17 @@ import operator
 import os
 import platform
 import re
+import shutil
 import sys
+import textwrap
 import time
 import traceback
+from collections.abc import Iterable
 from contextlib import contextmanager
 from datetime import datetime
 from enum import IntEnum
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable
 
 from rich.console import Console as RichConsole
 from rich.control import strip_control_codes
@@ -28,6 +31,9 @@ from rich.progress import (
 from rich.traceback import Trace, Traceback
 
 from briefcase import __version__
+
+# Max width for printing to console; matches argparse's default width
+MAX_TEXT_WIDTH = max(min(shutil.get_terminal_size().columns, 80) - 2, 20)
 
 # Regex to identify settings likely to contain sensitive information
 SENSITIVE_SETTING_RE = re.compile(r"API|TOKEN|KEY|SECRET|PASS|SIGNATURE", flags=re.I)
@@ -531,7 +537,7 @@ class Console:
         should be specifically disabled in non-interactive sessions.
         """
         # `sys.__stdout__` is used because Rich captures and redirects `sys.stdout`
-        return sys.__stdout__.isatty()
+        return os.isatty(sys.__stdout__.fileno())
 
     @property
     def is_color_enabled(self):
@@ -655,6 +661,14 @@ class Console:
             # Restore previous console state
             if is_wait_bar_running:
                 self._wait_bar.start()
+
+    def textwrap(self, text: str, width: int = MAX_TEXT_WIDTH) -> str:
+        """Wrap text to the console width, a default max width, or a specified width."""
+        # textwrap isn't really designed to format text that already contains newlines.
+        # So, instead, break the text by newlines and format each line individually.
+        return "\n".join(
+            "\n".join(textwrap.wrap(line, width)) for line in text.splitlines()
+        )
 
     def prompt(self, *values, markup=False, **kwargs):
         """Print to the screen for soliciting user interaction if input enabled.

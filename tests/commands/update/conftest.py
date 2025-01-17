@@ -73,6 +73,13 @@ class DummyUpdateCommand(UpdateCommand):
         self.actions.append(("support", app.app_name))
         create_file(self.bundle_path(app) / "support/content.txt", "app support")
 
+    def cleanup_stub_binary(self, app):
+        self.actions.append(("cleanup-stub", app.app_name))
+
+    def install_stub_binary(self, app):
+        self.actions.append(("stub", app.app_name))
+        create_file(self.bundle_path(app) / "stub.exe", "app stub")
+
     def cleanup_app_content(self, app):
         self.actions.append(("cleanup", app.app_name))
 
@@ -88,6 +95,7 @@ def update_command(tmp_path):
                 version="0.0.1",
                 description="The first simple app",
                 sources=["src/first"],
+                license={"file": "LICENSE"},
             ),
             "second": AppConfig(
                 app_name="second",
@@ -95,6 +103,7 @@ def update_command(tmp_path):
                 version="0.0.2",
                 description="The second simple app",
                 sources=["src/second"],
+                license={"file": "LICENSE"},
             ),
         },
     )

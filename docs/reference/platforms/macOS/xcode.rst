@@ -21,11 +21,15 @@ By default, apps will be both signed and notarized when they are packaged.
 Packaging format
 ================
 
-Briefcase supports two packaging formats for a macOS Xcode project:
+Briefcase supports three packaging formats for a macOS Xcode project:
 
-1. A DMG that contains the ``.app`` bundle (the default output of ``briefcase package
-   macOS Xcode``, or by using ``briefcase package macOS Xcode -p dmg``); or
-2. A zipped ``.app`` folder (using ``briefcase package macOS Xcode -p app``).
+1. A DMG that contains the ``.app`` bundle (using ``briefcase package macOS Xcode -p
+   dmg``).
+2. A zipped ``.app`` folder (using ``briefcase package macOS Xcode -p zip``).
+3. A ``.pkg`` installer (using ``briefcase package macOS Xcode -p pkg``).
+
+``.pkg`` is the *required* format for console apps. ``.dmg`` is the
+default format for GUI apps.
 
 Icon format
 ===========
@@ -41,9 +45,6 @@ the following sizes:
 * 512px
 * 1024px
 
-Splash Image format
-===================
-
 macOS Xcode projects do not support splash screens.
 
 Additional options
@@ -52,12 +53,7 @@ Additional options
 The following options can be provided at the command line when packaging
 macOS apps.
 
-``--no-notarize``
-~~~~~~~~~~~~~~~~~
-
-Do not submit the application for notarization. By default, apps will be
-submitted for notarization unless they have been signed with an ad-hoc
-signing identity.
+.. include:: signing_options.rst
 
 Application configuration
 =========================
@@ -120,8 +116,10 @@ Permissions
 Briefcase cross platform permissions map to a combination of ``info`` and ``entitlement``
 keys:
 
-* ``microphone``: an ``entitlement`` of ``com.apple.security.device.audio-input``
-* ``camera``: an ``entitlement`` of ``com.apple.security.device.camera``
+* ``microphone``: an ``info`` entry for ``NSMicrophoneUsageDescription``; and
+  an ``entitlement`` of ``com.apple.security.device.audio-input``
+* ``camera``: an ``info`` entry for ``NSCameraUsageDescription``; and
+  an ``entitlement`` of ``com.apple.security.device.camera``
 * ``coarse_location``: an ``info`` entry for ``NSLocationUsageDescription``
   (ignored if ``background_location`` or ``fine_location`` is defined); plus an
   entitlement of ``com.apple.security.personal-information.location``
@@ -130,7 +128,9 @@ keys:
   ``com.apple.security.personal-information.location``
 * ``background_location``: an ``info`` entry for ``NSLocationUsageDescription``;
   plus an ``entitlement`` of ``com.apple.security.personal-information.location``
-* ``photo_library``: an ``entitlement`` of ``com.apple.security.personal-information.photos-library``
+* ``photo_library``: an ``info`` entry for ``NSPhotoLibraryUsageDescription``;
+  plus an ``entitlement`` of
+  ``com.apple.security.personal-information.photos-library``
 
 Platform quirks
 ===============

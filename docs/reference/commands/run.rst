@@ -92,8 +92,8 @@ Update application requirements before running. Equivalent to running:
 ``--update-resources``
 ----------------------
 
-Update application resources (e.g., icons and splash screens) before running.
-Equivalent to running:
+Update application resources such as icons before running. Equivalent to
+running:
 
 .. code-block:: console
 
@@ -102,13 +102,24 @@ Equivalent to running:
     $ briefcase run
 
 ``--update-support``
-----------------------
+--------------------
 
 Update application support package before running. Equivalent to running:
 
 .. code-block:: console
 
-    $ briefcase update --update-resources
+    $ briefcase update --update-support
+    $ briefcase build
+    $ briefcase run
+
+``--update-stub``
+-----------------
+
+Update stub binary before running. Equivalent to running:
+
+.. code-block:: console
+
+    $ briefcase update --update-stub
     $ briefcase build
     $ briefcase run
 

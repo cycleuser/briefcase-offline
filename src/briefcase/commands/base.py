@@ -6,10 +6,9 @@ import importlib.metadata
 import inspect
 import os
 import platform
-import shutil
+import re
 import subprocess
 import sys
-import textwrap
 from abc import ABC, abstractmethod
 from argparse import RawDescriptionHelpFormatter
 from pathlib import Path
@@ -17,6 +16,8 @@ from typing import Any
 
 from cookiecutter import exceptions as cookiecutter_exceptions
 from cookiecutter.repository import is_repo_url
+from packaging.specifiers import InvalidSpecifier, Specifier
+from packaging.version import Version
 from platformdirs import PlatformDirs
 
 if sys.version_info >= (3, 11):  # pragma: no-cover-if-lt-py311
@@ -24,20 +25,22 @@ if sys.version_info >= (3, 11):  # pragma: no-cover-if-lt-py311
 else:  # pragma: no-cover-if-gte-py311
     import tomli as tomllib
 
+import briefcase
 from briefcase import __version__
 from briefcase.config import AppConfig, GlobalConfig, parse_config
-from briefcase.console import Console, Log
+from briefcase.console import MAX_TEXT_WIDTH, Console, Log
 from briefcase.exceptions import (
     BriefcaseCommandError,
     BriefcaseConfigError,
+    InvalidTemplateBranch,
     InvalidTemplateRepository,
     MissingAppMetadata,
     NetworkFailure,
-    TemplateUnsupportedVersion,
     UnsupportedHostError,
+    UnsupportedPythonVersion,
 )
 from briefcase.integrations.base import ToolCache
-from briefcase.integrations.download import Download
+from briefcase.integrations.file import File
 from briefcase.integrations.subprocess import Subprocess
 from briefcase.platforms import get_output_formats, get_platforms
 
@@ -56,21 +59,6 @@ def create_config(klass, config, msg):
         missing_args = required_args - config.keys()
         missing = ", ".join(f"'{arg}'" for arg in sorted(missing_args))
         raise BriefcaseConfigError(f"{msg} is incomplete (missing {missing})") from e
-
-
-def cookiecutter_cache_path(template):
-    """Determine the cookiecutter template cache directory given a template URL.
-
-    This will return a valid path, regardless of whether `template`
-
-    :param template: The template to use. This can be a filesystem path or
-        a URL.
-    :returns: The path that cookiecutter would use for the given template name.
-    """
-    template = template.rstrip("/")
-    tail = template.split("/")[-1]
-    cache_name = tail.rsplit(".git")[0]
-    return Path.home() / ".cookiecutters" / cache_name
 
 
 def full_options(state, options):
@@ -137,6 +125,7 @@ class BaseCommand(ABC):
     cmd_line = "briefcase {command} {platform} {output_format} {offline}"
     supported_host_os = {"Darwin", "Linux", "Windows"}
     supported_host_os_reason = f"This command is not supported on {platform.system()}."
+
     # defined by platform-specific subclasses
     command: str
     description: str
@@ -188,7 +177,7 @@ class BaseCommand(ABC):
 
         # Immediately add tools that must be always available
         Subprocess.verify(tools=self.tools)
-        Download.verify(tools=self.tools)
+        File.verify(tools=self.tools)
 
         if not is_clone:
             self.validate_locale()
@@ -354,6 +343,16 @@ a custom location for Briefcase's tools.
         """Publish Command factory for the same platform and format."""
         return self._command_factory("publish")
 
+    def template_cache_path(self, template) -> Path:
+        """The path where Briefcase keeps template checkouts.
+
+        :param template: The URL for the template that will be cached locally.
+        """
+        template = template.rstrip("/")
+        tail = template.split("/")[-1]
+        cache_name = tail.rsplit(".git")[0]
+        return self.data_path / "templates" / cache_name
+
     def build_path(self, app) -> Path:
         """The path in which all platform artefacts for the app will be built.
 
@@ -389,6 +388,31 @@ a custom location for Briefcase's tools.
 
         :param app: The app config
         """
+
+    def binary_executable_path(self, app) -> Path:
+        """The path to the actual binary object for the app in the output format.
+
+        For most platforms, this will be the same as the binary path. However, for
+        platforms that use an "executable bundle" (e.g., macOS), this will be actual
+        binary that is embedded in the bundle.
+
+        :param app: The app config
+        """
+        return self.binary_path(app)
+
+    def unbuilt_executable_path(self, app) -> Path:
+        """The path to the unbuilt form of the binary object for the app.
+
+        The pre-built stub binary may need to undergo some manipulation before it can be
+        used; to mark that this manipulation is required, the "unbuilt" binary has a
+        "raw" name that doesn't involve any app details. The build step moves the binary
+        to the final name.
+
+        :param app: The app config
+        """
+        return self.binary_executable_path(app).parent / (
+            "Stub" + self.binary_executable_path(app).suffix
+        )
 
     def briefcase_toml(self, app: AppConfig) -> dict[str, ...]:
         """Load the ``briefcase.toml`` file provided by the app template.
@@ -434,6 +458,14 @@ a custom location for Briefcase's tools.
         except KeyError:
             return None
 
+    def stub_binary_revision(self, app: AppConfig) -> str:
+        """Obtain the stub binary revision that the template requires.
+
+        :param app: The config object for the app
+        :return: The stub binary revision required by the template.
+        """
+        return self.path_index(app, "stub_binary_revision")
+
     def support_path(self, app: AppConfig) -> Path:
         """Obtain the path into which the support package should be unpacked.
 
@@ -467,6 +499,17 @@ a custom location for Briefcase's tools.
         :return: The full path where the requirements.txt file should be written
         """
         return self.bundle_path(app) / self.path_index(app, "app_requirements_path")
+
+    def app_requirement_installer_args_path(self, app: AppConfig) -> Path:
+        """Obtain the path into which a newline delimited requirement installer args
+        file should be written.
+
+        :param app: The config object for the app
+        :return: The full path where the file should be written
+        """
+        return self.bundle_path(app) / self.path_index(
+            app, "app_requirement_installer_args_path"
+        )
 
     def app_packages_path(self, app: AppConfig) -> Path:
         """Obtain the path into which requirements should be installed.
@@ -599,6 +642,7 @@ a custom location for Briefcase's tools.
         """
         self.verify_app_template(app)
         self.verify_app_tools(app)
+        self.verify_required_python(app)
 
     def verify_app_tools(self, app: AppConfig):
         """Verify that tools needed to run the command for this app exist."""
@@ -634,6 +678,27 @@ any compatibility problems, and then add the compatibility declaration.
 """
             )
 
+    def verify_required_python(self, app: AppConfig):
+        """Verify that the running version of Python meets the project's specifications."""
+
+        requires_python = getattr(self.global_config, "requires_python", None)
+        if not requires_python:
+            return
+
+        try:
+            spec = Specifier(requires_python)
+        except InvalidSpecifier as e:
+            raise BriefcaseConfigError(
+                f"Invalid requires-python in pyproject.toml: {e}"
+            ) from e
+
+        running_version = platform.python_version()
+
+        if not spec.contains(running_version, prereleases=True):
+            raise UnsupportedPythonVersion(
+                version_specifier=requires_python, running_version=running_version
+            )
+
     def parse_options(self, extra):
         """Parse the command line arguments for the Command.
 
@@ -656,13 +721,11 @@ any compatibility problems, and then add the compatibility declaration.
             formats = list(get_output_formats(self.platform).keys())
             formats[formats.index(default_format)] = f"{default_format} (default)"
             supported_formats_helptext = (
-                "\nSupported formats:\n"
-                f"  {', '.join(sorted(formats, key=str.lower))}"
+                f"Supported formats:\n  {', '.join(sorted(formats, key=str.lower))}"
             )
         else:
             supported_formats_helptext = ""
 
-        width = max(min(shutil.get_terminal_size().columns, 80) - 2, 20)
         parser = argparse.ArgumentParser(
             prog=self.cmd_line.format(
                 command=self.command,
@@ -670,11 +733,12 @@ any compatibility problems, and then add the compatibility declaration.
                 offline = self.offline,
                 output_format=self.output_format,
             ),
-            description=(
-                f"{textwrap.fill(self.description, width=width)}\n"
-                f"{supported_formats_helptext}"
+            description=self.input.textwrap(
+                f"{self.description}\n\n{supported_formats_helptext}"
             ),
-            formatter_class=lambda prog: RawDescriptionHelpFormatter(prog, width=width),
+            formatter_class=(
+                lambda prog: RawDescriptionHelpFormatter(prog, width=MAX_TEXT_WIDTH)
+            ),
         )
 
         self.add_default_options(parser)
@@ -793,6 +857,12 @@ any compatibility problems, and then add the compatibility declaration.
         )
 
         parser.add_argument(
+            "--update-stub",
+            action="store_true",
+            help=f"Update stub binary for the app{context_label}",
+        )
+
+        parser.add_argument(
             "--update-resources",
             action="store_true",
             help=f"Update app resources (icons, splash screens, etc){context_label}",
@@ -835,6 +905,7 @@ any compatibility problems, and then add the compatibility declaration.
                     config_file,
                     platform=self.platform,
                     output_format=self.output_format,
+                    logger=self.logger,
                 )
 
                 # Create the global config
@@ -879,30 +950,81 @@ Did you run Briefcase in a project directory that contains {filename.name!r}?"""
         if is_repo_url(template):
             # The app template is a repository URL.
             #
-            # When in `no_input=True` mode, cookiecutter deletes and reclones
-            # a template directory, rather than updating the existing repo.
-            #
-            # Look for a cookiecutter cache of the template; if one exists,
-            # try to update it using git. If no cache exists, or if the cache
-            # directory isn't a git directory, or git fails for some reason,
-            # fall back to using the specified template directly.
-            cached_template = cookiecutter_cache_path(template)
+            # Look for a Briefcase cache of the template.
+            cached_template = self.template_cache_path(template)
+
+            if cached_template.exists():
+                # There is a pre-existing cache of the template. Attempt to update it;
+                # if the fetch fails, use the existing state of the cache. Any other
+                # failure is surfaced to the user.
+                try:
+                    repo = self.tools.git.Repo(cached_template)
+                except self.tools.git.exc.GitError:
+                    # Template repository is in a weird state. Delete it
+                    self.logger.warning(
+                        "Template cache is in a weird state. Getting a clean clone."
+                    )
+                    self.tools.shutil.rmtree(cached_template)
+
+            if not cached_template.exists():
+                # There's no pre-existing template. It's either the first time seeing
+                # the template, or the template was in a weird state. Perform a blobless
+                # clone.
+                try:
+                    self.logger.info(f"Cloning template {template!r}...")
+                    cached_template.mkdir(exist_ok=True, parents=True)
+                    repo = self.tools.git.Repo.clone_from(
+                        url=template,
+                        to_path=cached_template,
+                        filter=["blob:none"],
+                        no_checkout=True,
+                    )
+                except KeyboardInterrupt:
+                    # The user has aborted the initial clone. Git is fairly resilient to
+                    # being interrupted, but if the *initial* clone fails, it's very
+                    # hard to recover. To avoid problems on the next run, remove the
+                    # partial repo clone.
+                    if cached_template.exists():
+                        self.tools.shutil.rmtree(cached_template)
+                    raise
+                except self.tools.git.exc.GitError as e:
+                    # The clone failed; to make sure the repo is in a clean state, clean up
+                    # any partial remnants of this initial clone.
+                    # If we're getting a GitError, we know the directory must exist.
+                    self.tools.shutil.rmtree(cached_template)
+                    git_fatal_message = re.findall(r"(?<=fatal: ).*?$", e.stderr, re.S)
+                    if git_fatal_message:
+                        # GitError captures stderr with single quotes. Because the regex above
+                        # takes everything after git's "fatal" message, we need to strip that final single quote.
+                        hint = git_fatal_message[0].rstrip("'").strip()
+
+                        # git is inconsistent with capitalisation of the first word of the message
+                        # and about periods at the end of the message.
+                        hint = f"{hint[0].upper()}{hint[1:]}{'' if hint[-1] == '.' else '.'}"
+                    else:
+                        hint = (
+                            "This may be because your computer is offline, or "
+                            "because the repository URL is incorrect."
+                        )
+
+                    raise BriefcaseCommandError(
+                        f"Unable to clone repository {template!r}.\n\n{hint}"
+                    ) from e
+
             try:
-                repo = self.tools.git.Repo(cached_template)
                 # Raises ValueError if "origin" isn't a valid remote
                 remote = repo.remote(name="origin")
                 # Ensure the existing repo's origin URL points to the location
                 # being requested. A difference can occur, for instance, if a
                 # fork of the template is used.
-                remote.set_url(new_url=template, old_url=remote.url)
+                remote.set_url(new_url=template)
                 try:
                     # Attempt to update the repository
                     remote.fetch()
                 except self.tools.git.exc.GitCommandError as e:
-                    # We are offline, or otherwise unable to contact
-                    # the origin git repo. It's OK to continue; but
-                    # capture the error in the log and warn the user
-                    # that the template may be stale.
+                    # We are offline, or otherwise unable to contact the origin git
+                    # repo. It's OK to continue; but capture the error in the log and
+                    # warn the user that the template may be stale.
                     self.logger.debug(str(e))
                     self.logger.warning(
                         """
@@ -929,18 +1051,17 @@ Did you run Briefcase in a project directory that contains {filename.name!r}?"""
                     head.checkout()
                 except IndexError as e:
                     # No branch exists for the requested version.
-                    raise TemplateUnsupportedVersion(branch) from e
-            except self.tools.git.exc.NoSuchPathError:
-                # Template cache path doesn't exist.
-                # Just use the template directly, rather than attempting an update.
-                cached_template = template
-            except self.tools.git.exc.InvalidGitRepositoryError:
-                # Template cache path exists, but isn't a git repository
-                # Just use the template directly, rather than attempting an update.
-                cached_template = template
-            except ValueError as e:
+                    raise InvalidTemplateBranch(template, branch) from e
+            except (ValueError, self.tools.git.exc.GitError) as e:
                 raise BriefcaseCommandError(
-                    f"Git repository in a weird state, delete {cached_template} and try briefcase create again"
+                    "Unable to check out template branch.\n"
+                    "\n"
+                    "This may be because your computer is offline, or because the template repository\n"
+                    "is in a weird state. If you have a stable network connection, try deleting:\n"
+                    "\n"
+                    f"    {cached_template}\n"
+                    "\n"
+                    "and retrying your command."
                 ) from e
         else:
             # If this isn't a repository URL, treat it as a local directory
@@ -948,7 +1069,7 @@ Did you run Briefcase in a project directory that contains {filename.name!r}?"""
 
         return cached_template
 
-    def generate_template(self, template, branch, output_path, extra_context):
+    def _generate_template(self, template, branch, output_path, extra_context):
         """Ensure the named template is up-to-date for the given branch, and roll out
         that template.
 
@@ -960,19 +1081,22 @@ Did you run Briefcase in a project directory that contains {filename.name!r}?"""
         # Make sure we have an updated cookiecutter template,
         # checked out to the right branch
         cached_template = self.update_cookiecutter_cache(
-            template=template, branch=branch
+            template=template,
+            branch=branch,
         )
 
         self.logger.configure_stdlib_logging("cookiecutter")
-
         try:
-            # Unroll the template
+            # Unroll the template.
             self.tools.cookiecutter(
                 str(cached_template),
                 no_input=True,
                 output_dir=str(output_path),
                 checkout=branch,
-                extra_context=extra_context,
+                # Use a copy to prevent changes propagating among tests while test suite is running
+                extra_context=extra_context.copy(),
+                # Store replay data in the Briefcase template cache instead of ~/.cookiecutter_replay
+                default_config={"replay_dir": str(self.template_cache_path(".replay"))},
             )
         except subprocess.CalledProcessError as e:
             # Computer is offline
@@ -984,4 +1108,62 @@ Did you run Briefcase in a project directory that contains {filename.name!r}?"""
             raise InvalidTemplateRepository(template) from e
         except cookiecutter_exceptions.RepositoryCloneFailed as e:
             # Branch does not exist.
-            raise TemplateUnsupportedVersion(branch) from e
+            raise InvalidTemplateBranch(template, branch) from e
+        except cookiecutter_exceptions.UndefinedVariableInTemplate as e:
+            raise BriefcaseConfigError(e.message) from e
+
+    def generate_template(
+        self,
+        template: str | None,
+        branch: str | None,
+        output_path: str | Path,
+        extra_context: dict[str, str],
+    ) -> None:
+        # If a branch wasn't supplied through the --template-branch argument,
+        # use the branch derived from the Briefcase version
+        version = Version(briefcase.__version__)
+        if branch is None:
+            template_branch = f"v{version.base_version}"
+        else:
+            template_branch = branch
+
+        extra_context = extra_context.copy()
+        # Additional context that can be used for the Briefcase template pyproject.toml
+        # header to include the version of Briefcase as well as the source of the template.
+        extra_context.update(
+            {
+                "template_source": template,
+                "template_branch": template_branch,
+                "briefcase_version": str(version),
+            }
+        )
+
+        try:
+            self.logger.info(
+                f"Using app template: {template}, branch {template_branch}"
+            )
+            # Unroll the new app template
+            self._generate_template(
+                template=template,
+                branch=template_branch,
+                output_path=output_path,
+                extra_context=extra_context,
+            )
+        except InvalidTemplateBranch:
+            # Only use the main template if we're on a development branch of briefcase
+            # and the user didn't explicitly specify which branch to use.
+            if version.dev is None or branch is not None:
+                raise
+
+            # Development branches can use the main template.
+            self.logger.info(
+                f"Template branch {template_branch} not found; falling back to development template"
+            )
+
+            extra_context["template_branch"] = "main"
+            self._generate_template(
+                template=template,
+                branch="main",
+                output_path=output_path,
+                extra_context=extra_context,
+            )

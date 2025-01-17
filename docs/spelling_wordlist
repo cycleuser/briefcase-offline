@@ -9,8 +9,10 @@ backend
 backends
 backported
 BeeWare
+blobless
 Bugfix
 Bugfixes
+ce
 checkmarks
 codebase
 Cookiecutter
@@ -24,6 +26,7 @@ Django
 dmg
 Dockerfile
 dr
+drawable
 embeddable
 executables
 Flathub
@@ -32,6 +35,7 @@ Flatpak
 Flatpaks
 Freedesktop
 Github
+geolocation
 gradle
 Gradle
 gradlew
@@ -64,11 +68,14 @@ proxied
 Proxied
 proxying
 px
+pygame
 Pygame
 Pyodide
 PyScript
 PySide
 pytest
+reStructuredText
+rpmbuild
 rst
 runtime
 Runtime
@@ -83,12 +90,14 @@ submodule
 subprocesses
 tl
 toml
+toolkits
 towncrier
 tox
 TTY
 tvOS
 unallocated
 untrusted
+vendored
 VisualStudio
 watchOS
 Wayland

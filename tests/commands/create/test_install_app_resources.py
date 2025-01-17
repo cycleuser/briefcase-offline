@@ -12,6 +12,7 @@ def test_no_resources(create_command):
         version="1.2.3",
         description="This is a simple app",
         sources=["src/my_app"],
+        license={"file": "LICENSE"},
     )
 
     # Prime the path index with no targets
@@ -23,7 +24,7 @@ def test_no_resources(create_command):
     # Install app resources
     create_command.install_app_resources(myapp)
 
-    # No icons, splash image or document types, so no calls to install images
+    # No icons or document types, so no calls to install images
     install_image.assert_not_called()
 
 
@@ -37,6 +38,7 @@ def test_icon_target(create_command, tmp_path):
         description="This is a simple app",
         sources=["src/my_app"],
         icon="images/icon",
+        license={"file": "LICENSE"},
     )
 
     # Prime the path index with 2 icon targets
@@ -106,6 +108,7 @@ def test_icon_variant_target(create_command, tmp_path):
             "round": "images/round",
             "square": "images/square",
         },
+        license={"file": "LICENSE"},
     )
 
     # Prime the path index with 2 icon targets
@@ -180,8 +183,8 @@ def test_icon_variant_target(create_command, tmp_path):
     )
 
 
-def test_splash_target(create_command, tmp_path):
-    """If the template defines a splash target, it will be installed."""
+def test_splash_target(create_command, capsys):
+    """If the template defines a splash target, a warning will be raised."""
     myapp = AppConfig(
         app_name="my-app",
         formal_name="My App",
@@ -190,17 +193,11 @@ def test_splash_target(create_command, tmp_path):
         description="This is a simple app",
         sources=["src/my_app"],
         splash="images/splash",
+        license={"file": "LICENSE"},
     )
 
-    # Prime the path index with 2 splash targets
-    create_command._briefcase_toml[myapp] = {
-        "paths": {
-            "splash": {
-                "10x20": "path/to/splash-10x20.png",
-                "20x30": "path/to/splash-20x30.png",
-            }
-        }
-    }
+    # Prime an empty path index
+    create_command._briefcase_toml[myapp] = {"paths": {}}
 
     install_image = mock.MagicMock()
     create_command.install_image = install_image
@@ -208,46 +205,15 @@ def test_splash_target(create_command, tmp_path):
     # Install app resources
     create_command.install_app_resources(myapp)
 
-    # 2 calls to install splash images will be made
-    install_image.assert_has_calls(
-        [
-            mock.call(
-                "splash image",
-                source="images/splash",
-                variant=None,
-                size="10x20",
-                target=tmp_path
-                / "base_path"
-                / "build"
-                / "my-app"
-                / "tester"
-                / "dummy"
-                / "path"
-                / "to"
-                / "splash-10x20.png",
-            ),
-            mock.call(
-                "splash image",
-                source="images/splash",
-                variant=None,
-                size="20x30",
-                target=tmp_path
-                / "base_path"
-                / "build"
-                / "my-app"
-                / "tester"
-                / "dummy"
-                / "path"
-                / "to"
-                / "splash-20x30.png",
-            ),
-        ],
-        any_order=True,
-    )
+    # No calls to install splashes are made
+    install_image.assert_not_called()
+
+    # A warning about the splash configuration was raised.
+    assert "The splash configuration will be ignored." in capsys.readouterr().out
 
 
-def test_splash_variant_target(create_command, tmp_path):
-    """If the template defines a splash target with variants, they will be installed."""
+def test_splash_variant_target(create_command, capsys):
+    """If the template defines a splash target with variants, a warning is raised."""
     myapp = AppConfig(
         app_name="my-app",
         formal_name="My App",
@@ -259,20 +225,11 @@ def test_splash_variant_target(create_command, tmp_path):
             "portrait": "images/portrait",
             "landscape": "images/landscape",
         },
+        license={"file": "LICENSE"},
     )
 
-    # Prime the path index with 2 splash targets
-    create_command._briefcase_toml[myapp] = {
-        "paths": {
-            "splash": {
-                "portrait": "path/to/portrait.png",
-                "landscape": {
-                    "10x20": "path/to/landscape-10x20.png",
-                    "20x30": "path/to/landscape-20x30.png",
-                },
-            }
-        }
-    }
+    # Prime an empty path index
+    create_command._briefcase_toml[myapp] = {"paths": {}}
 
     install_image = mock.MagicMock()
     create_command.install_image = install_image
@@ -280,57 +237,11 @@ def test_splash_variant_target(create_command, tmp_path):
     # Install app resources
     create_command.install_app_resources(myapp)
 
-    # 3 calls to install splashes will be made
-    install_image.assert_has_calls(
-        [
-            mock.call(
-                "splash image",
-                source={"portrait": "images/portrait", "landscape": "images/landscape"},
-                variant=None,
-                size="portrait",  # This is expected for unsized variants
-                target=tmp_path
-                / "base_path"
-                / "build"
-                / "my-app"
-                / "tester"
-                / "dummy"
-                / "path"
-                / "to"
-                / "portrait.png",
-            ),
-            mock.call(
-                "splash image",
-                source={"portrait": "images/portrait", "landscape": "images/landscape"},
-                variant="landscape",
-                size="10x20",
-                target=tmp_path
-                / "base_path"
-                / "build"
-                / "my-app"
-                / "tester"
-                / "dummy"
-                / "path"
-                / "to"
-                / "landscape-10x20.png",
-            ),
-            mock.call(
-                "splash image",
-                source={"portrait": "images/portrait", "landscape": "images/landscape"},
-                variant="landscape",
-                size="20x30",
-                target=tmp_path
-                / "base_path"
-                / "build"
-                / "my-app"
-                / "tester"
-                / "dummy"
-                / "path"
-                / "to"
-                / "landscape-20x30.png",
-            ),
-        ],
-        any_order=True,
-    )
+    # No calls to install splashes are made
+    install_image.assert_not_called()
+
+    # A warning about the splash configuration was raised.
+    assert "The splash configuration will be ignored." in capsys.readouterr().out
 
 
 def test_doctype_icon_target(create_command, tmp_path):
@@ -343,11 +254,20 @@ def test_doctype_icon_target(create_command, tmp_path):
         description="This is a simple app",
         sources=["src/my_app"],
         document_type={
-            "mydoc": {"icon": "images/mydoc-icon"},
+            "mydoc": {
+                "icon": "images/mydoc-icon",
+                "description": "mydoc image",
+                "url": "https://testexample.com",
+                "extension": "mydoc",
+            },
             "other": {
                 "icon": "images/other-icon",
+                "description": "other image",
+                "url": "https://othertestexample.com",
+                "extension": "other",
             },
         },
+        license={"file": "LICENSE"},
     )
 
     # Prime the path index with 2 document types;

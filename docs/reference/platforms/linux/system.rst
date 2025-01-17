@@ -69,9 +69,6 @@ the following sizes:
 * 256px
 * 512px
 
-Splash Image format
-===================
-
 Linux System packages do not support splash screens or installer images.
 
 Additional files
@@ -107,7 +104,7 @@ normalization of code name and version is performed, so ``ubuntu:jammy`` and
 same version).
 
 You can specify any identifier you want, provided the distribution is still
-supported by the vendor, and system Python is Python 3.8 or later.
+supported by the vendor, and system Python is Python 3.9 or later.
 
 The following Linux vendors are known to work as Docker targets:
 
@@ -201,7 +198,7 @@ but non ``-dev`` packages at runtime.
 they can optionally include version pins. Briefcase will automatically include
 the dependencies needed for Python. For example::
 
-    system_runtime_requires = ["libgtk-3-0 (>=3.14)", "libwebkit2gtk-4.0-37"]
+    system_runtime_requires = ["libgtk-3-0 (>=3.14)", "libwebkit2gtk-4.1-0"]
 
 will specify that your app needs Python 3, a version of ``libgtk >= 3.14``, and any
 version of ``libwebkit2gtk``.
@@ -241,3 +238,15 @@ perform container setup operations as ``root``, switch the container's user to
 
     USER brutus
     """
+
+Platform quirks
+===============
+
+Local path references and Docker builds
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Docker builds are not able to reference local paths in the ``requires`` and
+``requirement_installer_args`` configurations. This is because the Docker container only
+has access to specific file paths on the host system. See `issue #2018
+<https://github.com/beeware/briefcase/issues/2081>`__ for more discussion of the
+problem, and some possible workarounds.

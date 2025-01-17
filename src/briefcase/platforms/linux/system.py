@@ -386,7 +386,7 @@ class LinuxSystemMostlyPassiveMixin(LinuxSystemPassiveMixin):
         self.target_image = command.target_image
         self.extra_docker_build_args = command.extra_docker_build_args
 
-    def verify_python(self, app: AppConfig):
+    def verify_docker_python(self, app: AppConfig):
         """Verify that the version of Python being used to build the app in Docker is
         compatible with the version being used to run Briefcase.
 
@@ -476,7 +476,15 @@ class LinuxSystemMostlyPassiveMixin(LinuxSystemPassiveMixin):
             if the system cannot be identified.
         """
         if app.target_vendor_base == DEBIAN:
-            base_system_packages = ["python3-dev", "build-essential"]
+            base_system_packages = [
+                "python3-dev",
+                # The consitutent parts of build-essential
+                ("dpkg-dev", "build-essential"),
+                ("g++", "build-essential"),
+                ("gcc", "build-essential"),
+                ("libc6-dev", "build-essential"),
+                ("make", "build-essential"),
+            ]
             system_verify = ["dpkg", "-s"]
             system_installer = ["apt", "install"]
         elif app.target_vendor_base == RHEL:
@@ -543,12 +551,22 @@ class LinuxSystemMostlyPassiveMixin(LinuxSystemPassiveMixin):
 
         # Run a check for each package listed in the app's system_requires,
         # plus the baseline system packages that are required.
-        missing = []
+        missing = set()
         for package in base_system_packages + getattr(app, "system_requires", []):
+            # Look for tuples in the package list. If there's a tuple, we're looking
+            # for the first name in the tuple on the installed list, but we install
+            # the package using the second name. This is to handle `build-essential`
+            # style installation aliases. If it's not a tuple, the package name is
+            # provided by the same name that we're checking for.
+            if isinstance(package, tuple):
+                installed, provided_by = package
+            else:
+                installed = provided_by = package
+
             try:
-                self.tools.subprocess.check_output(system_verify + [package])
+                self.tools.subprocess.check_output(system_verify + [installed])
             except subprocess.CalledProcessError:
-                missing.append(package)
+                missing.add(provided_by)
 
         # If any required packages are missing, raise an error.
         if missing:
@@ -556,7 +574,7 @@ class LinuxSystemMostlyPassiveMixin(LinuxSystemPassiveMixin):
                 f"""\
 Unable to build {app.app_name} due to missing system dependencies. Run:
 
-    sudo {" ".join(system_installer)} {" ".join(missing)}
+    sudo {" ".join(system_installer)} {" ".join(sorted(missing))}
 
 to install the missing dependencies, and re-run Briefcase.
 """
@@ -591,7 +609,7 @@ to install the missing dependencies, and re-run Briefcase.
             # Check the system Python on the target system to see if it is
             # compatible with Briefcase.
             if verify_python:
-                self.verify_python(app)
+                self.verify_docker_python(app)
         else:
             NativeAppContext.verify(tools=self.tools, app=app)
 
@@ -704,16 +722,38 @@ class LinuxSystemBuildCommand(LinuxSystemMixin, BuildCommand):
         doc_folder.mkdir(parents=True, exist_ok=True)
 
         with self.input.wait_bar("Installing license..."):
-            license_file = self.base_path / "LICENSE"
-            if license_file.is_file():
-                self.tools.shutil.copy(license_file, doc_folder / "copyright")
+            if license_file := app.license.get("file"):
+                license_file = self.base_path / license_file
+                if license_file.is_file():
+                    self.tools.shutil.copy(license_file, doc_folder / "copyright")
+                else:
+                    raise BriefcaseCommandError(
+                        f"""\
+Your `pyproject.toml` specifies a license file of {str(license_file.relative_to(self.base_path))!r}.
+However, this file does not exist.
+
+Ensure you have correctly spelled the filename in your `license.file` setting.
+
+"""
+                    )
+            elif license_text := app.license.get("text"):
+                (doc_folder / "copyright").write_text(license_text, encoding="utf-8")
+                if len(license_text.splitlines()) <= 1:
+                    self.logger.warning(
+                        """
+Your app specifies a license using `license.text`, but the value doesn't appear to be a
+full license. Briefcase will generate a `copyright` file for your project; you should
+ensure that the contents of this file is adequate.
+"""
+                    )
             else:
                 raise BriefcaseCommandError(
                     """\
-Your project does not contain a LICENSE file.
+Your project does not contain a LICENSE definition.
 
 Create a file named `LICENSE` in the same directory as your `pyproject.toml`
-with your app's licensing terms.
+with your app's licensing terms, and set `license.file = 'LICENSE'` in your
+app's configuration.
 """
                 )
 
@@ -761,7 +801,7 @@ with details about the release.
                     f"Template does not provide a manpage source file `{app.app_name}.1`"
                 )
 
-        self.logger.info("Update file permissions...")
+        self.logger.verbose("Update file permissions...")
         with self.input.wait_bar("Updating file permissions..."):
             for path in self.project_path(app).glob("**/*"):
                 old_perms = self.tools.os.stat(path).st_mode & 0o777
@@ -775,7 +815,7 @@ with details about the release.
 
                 # If there's been any change in permissions, apply them
                 if new_perms != old_perms:  # pragma: no-cover-if-is-windows
-                    self.logger.info(
+                    self.logger.verbose(
                         "Updating file permissions on "
                         f"{path.relative_to(self.bundle_path(app))} "
                         f"from {oct(old_perms)[2:]} to {oct(new_perms)[2:]}"
@@ -792,7 +832,11 @@ class LinuxSystemRunCommand(LinuxSystemMixin, RunCommand):
     supported_host_os_reason = "Linux system projects can only be executed on Linux."
 
     def run_app(
-        self, app: AppConfig, test_mode: bool, passthrough: list[str], **kwargs
+        self,
+        app: AppConfig,
+        test_mode: bool,
+        passthrough: list[str],
+        **kwargs,
     ):
         """Start the application.
 
@@ -801,26 +845,39 @@ class LinuxSystemRunCommand(LinuxSystemMixin, RunCommand):
         :param passthrough: The list of arguments to pass to the app
         """
         # Set up the log stream
-        kwargs = self._prepare_app_env(app=app, test_mode=test_mode)
+        kwargs = self._prepare_app_kwargs(app=app, test_mode=test_mode)
 
         with self.tools[app].app_context.run_app_context(kwargs) as kwargs:
-            # Start the app in a way that lets us stream the logs
-            app_popen = self.tools[app].app_context.Popen(
-                [self.binary_path(app)] + passthrough,
-                cwd=self.tools.home_path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                bufsize=1,
-                **kwargs,
-            )
+            # Console apps must operate in non-streaming mode so that console input can
+            # be handled correctly. However, if we're in test mode, we *must* stream so
+            # that we can see the test exit sentinel
+            if app.console_app and not test_mode:
+                self.logger.info("=" * 75)
+                self.tools[app].app_context.run(
+                    [self.binary_path(app)] + passthrough,
+                    cwd=self.tools.home_path,
+                    bufsize=1,
+                    stream_output=False,
+                    **kwargs,
+                )
+            else:
+                # Start the app in a way that lets us stream the logs
+                app_popen = self.tools[app].app_context.Popen(
+                    [self.binary_path(app)] + passthrough,
+                    cwd=self.tools.home_path,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    bufsize=1,
+                    **kwargs,
+                )
 
-            # Start streaming logs for the app.
-            self._stream_app_logs(
-                app,
-                popen=app_popen,
-                test_mode=test_mode,
-                clean_output=False,
-            )
+                # Start streaming logs for the app.
+                self._stream_app_logs(
+                    app,
+                    popen=app_popen,
+                    test_mode=test_mode,
+                    clean_output=False,
+                )
 
 
 def debian_multiline_description(description):
@@ -1037,7 +1094,7 @@ class LinuxSystemPackageCommand(LinuxSystemMixin, PackageCommand):
                             f"Release:        {getattr(app, 'revision', 1)}%{{?dist}}",
                             f"Summary:        {app.description}",
                             "",
-                            f"License:        {getattr(app, 'license', 'Unknown')}",
+                            "License:        Unknown",  # TODO: Add license information (see #1829)
                             f"URL:            {app.url}",
                             "Source0:        %{name}-%{version}.tar.gz",
                             "",
@@ -1196,7 +1253,7 @@ with details about the release.
                             f'pkgdesc="{app.description}"',
                             f"arch=('{self.pkg_abi(app)}')",
                             f'url="{app.url}"',
-                            f"license=('{app.license}')",
+                            "license=('Unknown')",
                             f"depends=({system_runtime_requires})",
                             "changelog=CHANGELOG",
                             'source=("$pkgname-$pkgver.tar.gz")',

@@ -5,9 +5,9 @@ import os
 import socket
 import subprocess
 import sys
+from collections.abc import Iterable, Mapping
 from functools import lru_cache
 from pathlib import Path, PosixPath, PurePosixPath
-from typing import Iterable, Mapping
 
 from packaging.version import InvalidVersion, Version
 
@@ -173,6 +173,7 @@ See https://docs.docker.com/go/buildx/ to install the buildx plugin.
                 )
                 .split("Docker version ")[1]
                 .split(",")[0]
+                .split("-")[0]
             )
 
             # Ensure Docker version is compatible

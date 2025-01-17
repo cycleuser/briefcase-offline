@@ -8,12 +8,24 @@ import zipfile
 from email.message import EmailMessage
 from pathlib import Path
 
-import requests
-from requests.adapters import HTTPAdapter
+import httpx
 from rich.markup import escape
-from urllib3.util.retry import Retry
 
 from briefcase.console import Console, InputDisabled
+
+
+class PartialMatchString(str):
+    "A string-like class that has equality on a partial match"
+
+    def __eq__(self, other):
+        return self in other
+
+
+class NoMatchString(str):
+    "A string-like class that has equality when there is no match"
+
+    def __eq__(self, other):
+        return self not in other
 
 
 class DummyConsole(Console):
@@ -95,15 +107,17 @@ def create_zip_file(zippath, content):
     return zippath
 
 
-def create_tgz_file(tgzpath, content):
+def create_tgz_file(tgzpath, content, links=None):
     """A test utility to create a .tar.gz file with known content.
 
     Ensures that the directory for the file exists, and writes a file with specific
     content.
 
-    :param tgzpath: The path for the ZIP file to create
+    :param tgzpath: The path for the gzipped tarfile file to create
     :param content: A list of pairs; each pair is (path, data) describing an item to be
-        added to the zip file.
+        added to the tgz file.
+    :param links: (Optional) A list of pairs; each pair is a (path, target) describing a
+        symlink item to be added to the tgz file, and the file it will target.
     :returns: The path to the file that was created.
     """
     tgzpath.parent.mkdir(parents=True, exist_ok=True)
@@ -113,6 +127,12 @@ def create_tgz_file(tgzpath, content):
             payload = data.encode("utf-8")
             tarinfo.size = len(payload)
             f.addfile(tarinfo, io.BytesIO(payload))
+        if links:
+            for path, target in links:
+                tarinfo = tarfile.TarInfo(path)
+                tarinfo.linkname = target
+                tarinfo.type = tarfile.SYMTYPE
+                f.addfile(tarinfo, None)
 
     return tgzpath
 
@@ -127,7 +147,7 @@ def mock_file_download(filename, content, mode="w", role=None):
         use `wb` and provide content as a bitstring if you need to
         write a binary file.
     :param role: The role played by the content being downloaded
-    :returns: a function that can act as a mock side effect for `download.file()`
+    :returns: a function that can act as a mock side effect for `file.download()`
     """
 
     def _download_file(url, download_path, role):
@@ -143,7 +163,7 @@ def mock_zip_download(filename, content, role=None):
         create as a side effect
     :param content: A string containing the content to write.
     :param role: The role played by the content being downloaded
-    :returns: a function that can act as a mock side effect for `download.file()`
+    :returns: a function that can act as a mock side effect for `file.download()`
     """
 
     def _download_file(url, download_path, role):
@@ -152,15 +172,18 @@ def mock_zip_download(filename, content, role=None):
     return _download_file
 
 
-def mock_tgz_download(filename, content, role=None):
+def mock_tgz_download(filename, content, role=None, links=None):
     """Create a side effect function that mocks the download of a .tar.gz file.
 
     :param content: A string containing the content to write.
-    :returns: a function that can act as a mock side effect for `download.file()`
+    :param role: The role played by the content being downloaded
+    :param links: (Optional) A list of pairs; each pair is a (path, target) describing a
+        symlink item to be added to the tgz file, and the file it will target.
+    :returns: a function that can act as a mock side effect for `file.download()`
     """
 
     def _download_file(url, download_path, role):
-        return create_tgz_file(download_path / filename, content)
+        return create_tgz_file(download_path / filename, content, links)
 
     return _download_file
 
@@ -305,9 +328,17 @@ def file_content(path: Path) -> str | None:
 
 def assert_url_resolvable(url: str):
     """Tests whether a URL is resolvable with retries; raises for failure."""
-    with requests.session() as sess:
-        adapter = HTTPAdapter(max_retries=Retry(status_forcelist={500, 502, 504}))
-        sess.mount("http://", adapter)
-        sess.mount("https://", adapter)
+    transport = httpx.HTTPTransport(
+        # Retry for connection issues
+        retries=3,
+    )
+    with httpx.Client(transport=transport, follow_redirects=True) as client:
+        bad_response_retries = 3
+        retry_status_codes = {500, 502, 504}
+        while bad_response_retries > 0:
+            response = client.head(url)
+            if response.status_code not in retry_status_codes:
+                # break if the status code is not one we care to retry (hopefully a success!)
+                break
 
-        sess.head(url).raise_for_status()
+        response.raise_for_status()

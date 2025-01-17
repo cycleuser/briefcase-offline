@@ -4,6 +4,160 @@ Release History
 
 .. towncrier release notes start
 
+0.3.20 (2024-10-15)
+===================
+
+Features
+--------
+
+* Support for Python 3.13 has been added.
+* When the available version of Git is older than v2.17.0, an error message now prompts the user to upgrade their install of Git to proceed. (`#1915 <https://github.com/beeware/briefcase/issues/1915>`__)
+* Apps packaged for Flatpak and AppImage now use a stripped (and smaller) Python support package. (`#1929 <https://github.com/beeware/briefcase/issues/1929>`__)
+* macOS app templates can now specify what part of the support package should be copied into the final application bundle. (`#1933 <https://github.com/beeware/briefcase/issues/1933>`__)
+* The Flatpak runtimes for new projects were updated. ``org.freedesktop.Platform`` will now default to 24.08; ``org.gnome.Platform`` will now default to 46; and ``org.kde.Platform`` will now default to 6.7. (`#1987 <https://github.com/beeware/briefcase/issues/1987>`__)
+* Briefcase will now validate that the running Python interpreter meets requirements specified by the PEP 621 ``requires-python`` setting. If ``requires-python`` is not set, there is no change in behavior. Briefcase will also validate that ``requires-python`` is a valid version specifier as laid out by PEP 621's requirements. (`#2016 <https://github.com/beeware/briefcase/issues/2016>`__)
+
+
+Bugfixes
+--------
+
+* Document type declarations are now fully validated. (`#1846 <https://github.com/beeware/briefcase/issues/1846>`__)
+* The order in which nested frameworks and apps are signed on macOS has been corrected. (`#1891 <https://github.com/beeware/briefcase/issues/1891>`__)
+* The spacing after the New Project wizard prompts are now consistent. (`#1896 <https://github.com/beeware/briefcase/issues/1896>`__)
+* The documentation link provided when an app doesn't specify Gradle dependencies in its configuration has been corrected. (`#1905 <https://github.com/beeware/briefcase/issues/1905>`__)
+* The log filter for iOS has been modified to capture logs generated when using PEP 730-style binary modules. (`#1933 <https://github.com/beeware/briefcase/issues/1933>`__)
+* Briefcase is now able to remove symbolic links to directories as part of the template cleanup. (`#1933 <https://github.com/beeware/briefcase/issues/1933>`__)
+* If a macOS support package contains symbolic links, those symbolic links will be preserved when the support package is copied into the app bundle. (`#1933 <https://github.com/beeware/briefcase/issues/1933>`__)
+* Briefcase will no longer attempt to sign symbolic links in macOS apps. (`#1933 <https://github.com/beeware/briefcase/issues/1933>`__)
+* Packages that include ``.dist-info`` content in vendored dependencies are now ignored as part of the binary widening process on macOS. If a binary package has vendored sub-packages, it is assumed that the top-level package includes the vendored packages' files in its wheel manifest. (`#1970 <https://github.com/beeware/briefcase/issues/1970>`__)
+* The types used by ``AppContext`` in GUI toolkit bootstraps for creating new projects have been corrected. (`#1988 <https://github.com/beeware/briefcase/issues/1988>`__)
+* The ``--test`` flag now works for console apps for macOS. (`#1992 <https://github.com/beeware/briefcase/issues/1992>`__)
+* Python 3.12.7 introduced an incompatibility with the handling of ``-C``, ``-d`` and other flags that accept values. This incompatibility has been corrected. (`#2026 <https://github.com/beeware/briefcase/issues/2026>`__)
+
+
+Backward Incompatible Changes
+-----------------------------
+
+* Java JDK 17.0.12+7 is now used to package Android apps. Use ``briefcase upgrade java`` to update your Briefcase-installed JDK instance to this version. (`#1920 <https://github.com/beeware/briefcase/issues/1920>`__)
+* Support for Python 3.8 has been dropped. (`#1934 <https://github.com/beeware/briefcase/issues/1934>`__)
+* macOS and iOS templates have both had an epoch increase. macOS and iOS projects created with previous versions of Briefcase will need to be re-generated. (`#1934 <https://github.com/beeware/briefcase/issues/1934>`__)
+* Any project using binary modules on iOS will need to be recompiled to use the binary linking format and wheel tag specified by `PEP 730 <https://peps.python.org/pep-0730/>`__  (`#1934 <https://github.com/beeware/briefcase/issues/1934>`__)
+
+Documentation
+-------------
+
+* A how-to guide for building apps in GitHub Actions CI was added. (`#400 <https://github.com/beeware/briefcase/issues/400>`__)
+* Fixed error in example in briefcase run documentation. (`#1928 <https://github.com/beeware/briefcase/issues/1928>`__)
+* Building Briefcase's documentation now requires the use of Python 3.12. (`#1942 <https://github.com/beeware/briefcase/issues/1942>`__)
+
+Misc
+----
+
+* `#1877 <https://github.com/beeware/briefcase/issues/1877>`__, `#1878 <https://github.com/beeware/briefcase/issues/1878>`__, `#1884 <https://github.com/beeware/briefcase/issues/1884>`__, `#1885 <https://github.com/beeware/briefcase/issues/1885>`__, `#1886 <https://github.com/beeware/briefcase/issues/1886>`__, `#1892 <https://github.com/beeware/briefcase/issues/1892>`__, `#1901 <https://github.com/beeware/briefcase/issues/1901>`__, `#1902 <https://github.com/beeware/briefcase/issues/1902>`__, `#1903 <https://github.com/beeware/briefcase/issues/1903>`__, `#1904 <https://github.com/beeware/briefcase/issues/1904>`__, `#1911 <https://github.com/beeware/briefcase/issues/1911>`__, `#1912 <https://github.com/beeware/briefcase/issues/1912>`__, `#1913 <https://github.com/beeware/briefcase/issues/1913>`__, `#1923 <https://github.com/beeware/briefcase/issues/1923>`__, `#1924 <https://github.com/beeware/briefcase/issues/1924>`__, `#1925 <https://github.com/beeware/briefcase/issues/1925>`__, `#1926 <https://github.com/beeware/briefcase/issues/1926>`__, `#1931 <https://github.com/beeware/briefcase/issues/1931>`__, `#1932 <https://github.com/beeware/briefcase/issues/1932>`__, `#1936 <https://github.com/beeware/briefcase/issues/1936>`__, `#1937 <https://github.com/beeware/briefcase/issues/1937>`__, `#1938 <https://github.com/beeware/briefcase/issues/1938>`__, `#1939 <https://github.com/beeware/briefcase/issues/1939>`__, `#1940 <https://github.com/beeware/briefcase/issues/1940>`__, `#1951 <https://github.com/beeware/briefcase/issues/1951>`__, `#1952 <https://github.com/beeware/briefcase/issues/1952>`__, `#1953 <https://github.com/beeware/briefcase/issues/1953>`__, `#1954 <https://github.com/beeware/briefcase/issues/1954>`__, `#1955 <https://github.com/beeware/briefcase/issues/1955>`__, `#1967 <https://github.com/beeware/briefcase/issues/1967>`__, `#1971 <https://github.com/beeware/briefcase/issues/1971>`__, `#1977 <https://github.com/beeware/briefcase/issues/1977>`__, `#1978 <https://github.com/beeware/briefcase/issues/1978>`__, `#1979 <https://github.com/beeware/briefcase/issues/1979>`__, `#1983 <https://github.com/beeware/briefcase/issues/1983>`__, `#1984 <https://github.com/beeware/briefcase/issues/1984>`__, `#1985 <https://github.com/beeware/briefcase/issues/1985>`__, `#1989 <https://github.com/beeware/briefcase/issues/1989>`__, `#1990 <https://github.com/beeware/briefcase/issues/1990>`__, `#1991 <https://github.com/beeware/briefcase/issues/1991>`__, `#1994 <https://github.com/beeware/briefcase/issues/1994>`__, `#1995 <https://github.com/beeware/briefcase/issues/1995>`__, `#2001 <https://github.com/beeware/briefcase/issues/2001>`__, `#2002 <https://github.com/beeware/briefcase/issues/2002>`__, `#2003 <https://github.com/beeware/briefcase/issues/2003>`__, `#2009 <https://github.com/beeware/briefcase/issues/2009>`__, `#2012 <https://github.com/beeware/briefcase/issues/2012>`__, `#2013 <https://github.com/beeware/briefcase/issues/2013>`__, `#2014 <https://github.com/beeware/briefcase/issues/2014>`__, `#2015 <https://github.com/beeware/briefcase/issues/2015>`__, `#2017 <https://github.com/beeware/briefcase/issues/2017>`__, `#2020 <https://github.com/beeware/briefcase/issues/2020>`__, `#2021 <https://github.com/beeware/briefcase/issues/2021>`__, `#2022 <https://github.com/beeware/briefcase/issues/2022>`__, `#2023 <https://github.com/beeware/briefcase/issues/2023>`__, `#2024 <https://github.com/beeware/briefcase/issues/2024>`__, `#2025 <https://github.com/beeware/briefcase/issues/2025>`__, `#2031 <https://github.com/beeware/briefcase/issues/2031>`__
+
+
+0.3.19 (2024-06-12)
+===================
+
+Features
+--------
+
+* Briefcase can now package command line apps. (`#556 <https://github.com/beeware/briefcase/issues/556>`__)
+* Templates that use pre-compiled stub binaries can now manage that artefact as an independent resource, rather than needing to include the binary in the template repository. This significantly reduces the size of the macOS and Windows app templates. (`#933 <https://github.com/beeware/briefcase/issues/933>`__)
+* Template repositories are now fetched as blobless partial Git clones, reducing the size of initial downloads. (`#933 <https://github.com/beeware/briefcase/issues/933>`__)
+* macOS now supports the generation of ``.pkg`` installers as a packaging format. (`#1184 <https://github.com/beeware/briefcase/issues/1184>`__)
+* Android SDK Command Line Tools 12.0 is now used to build Android apps. (`#1778 <https://github.com/beeware/briefcase/issues/1778>`__)
+* The new project wizard now includes links to known third-party GUI bootstraps. (`#1807 <https://github.com/beeware/briefcase/issues/1807>`__)
+* The name of the license file can now be specified using a PEP 621-compliant format for the ``license`` setting. (`#1812 <https://github.com/beeware/briefcase/issues/1812>`__)
+* The default Gradle dependencies for a Toga project no longer includes ``SwipeRefreshLayout``. (`#1845 <https://github.com/beeware/briefcase/issues/1845>`__)
+
+Bugfixes
+--------
+
+* Validation rules for bundle identifiers have been loosened. App IDs that contain country codes or language reserved words are no longer flagged as invalid. (`#1212 <https://github.com/beeware/briefcase/issues/1212>`__)
+* macOS code signing no longer uses the deprecated "deep signing" option. (`#1221 <https://github.com/beeware/briefcase/issues/1221>`__)
+* If ``run`` is executed directly after a ``create`` when using an ``app`` template on macOS or Windows, the implied ``build`` step is now correctly identified. (`#1729 <https://github.com/beeware/briefcase/issues/1729>`__)
+* Escaping of quotation marks in TOML templates was corrected. (`#1746 <https://github.com/beeware/briefcase/issues/1746>`__)
+* The Docker version on OpenSUSE Tumbleweed is now accepted and no longer triggers a warning message. (`#1773 <https://github.com/beeware/briefcase/issues/1773>`__)
+* The formal name of an app is now validated. (`#1810 <https://github.com/beeware/briefcase/issues/1810>`__)
+* macOS apps now generate ``info.plist`` entries for camera, photo library and microphone permissions. (`#1820 <https://github.com/beeware/briefcase/issues/1820>`__)
+
+Backward Incompatible Changes
+-----------------------------
+
+* Briefcase now uses a private cache of Cookiecutter templates, rather than the shared ``~/.cookiecutters`` directory. You can reclaim disk space by deleting ``~/.cookiecutters/briefcase-*`` and ``~/.cookiecutter_replay/briefcase-*`` (or the entire ``~/.cookiecutters`` and ``~/.cookiecutter_replay`` folders if you are not using Cookiecutter for any other purposes). (`#933 <https://github.com/beeware/briefcase/issues/933>`__)
+* The macOS ``app`` packaging format has been renamed ``zip`` for consistency with Windows, and to reflect the format of the output artefact. (`#1781 <https://github.com/beeware/briefcase/issues/1781>`__)
+* The format for the ``license`` field has been converted to PEP 621 format. Existing projects that specify ``license`` as a string should update their configurations to point at the generated license file using ``license.file = "LICENSE"``. (`#1812 <https://github.com/beeware/briefcase/issues/1812>`__)
+* The PursuedPyBear bootstrap has been migrated to be part of the PursuedPyBear project. (`#1834 <https://github.com/beeware/briefcase/issues/1834>`__)
+
+Documentation
+-------------
+
+* Documentation describing manual signing requirement for Android packages has been added. (`#1703 <https://github.com/beeware/briefcase/issues/1703>`__)
+* Documentation of Briefcase's support for document types has been improved. (`#1771 <https://github.com/beeware/briefcase/issues/1771>`__)
+* Documentation on Briefcase's plug-in interfaces was added. (`#1807 <https://github.com/beeware/briefcase/issues/1807>`__)
+* Documentation on the use of passwords in Android publication now encourages users to set non-default passwords. (`#1816 <https://github.com/beeware/briefcase/issues/1816>`__)
+
+Misc
+----
+
+* `#1184 <https://github.com/beeware/briefcase/issues/1184>`__, `#1472 <https://github.com/beeware/briefcase/issues/1472>`__, `#1777 <https://github.com/beeware/briefcase/issues/1777>`__, `#1784 <https://github.com/beeware/briefcase/issues/1784>`__, `#1786 <https://github.com/beeware/briefcase/issues/1786>`__, `#1789 <https://github.com/beeware/briefcase/issues/1789>`__, `#1790 <https://github.com/beeware/briefcase/issues/1790>`__, `#1791 <https://github.com/beeware/briefcase/issues/1791>`__, `#1792 <https://github.com/beeware/briefcase/issues/1792>`__, `#1793 <https://github.com/beeware/briefcase/issues/1793>`__, `#1798 <https://github.com/beeware/briefcase/issues/1798>`__, `#1799 <https://github.com/beeware/briefcase/issues/1799>`__, `#1800 <https://github.com/beeware/briefcase/issues/1800>`__, `#1817 <https://github.com/beeware/briefcase/issues/1817>`__, `#1819 <https://github.com/beeware/briefcase/issues/1819>`__, `#1821 <https://github.com/beeware/briefcase/issues/1821>`__, `#1823 <https://github.com/beeware/briefcase/issues/1823>`__, `#1839 <https://github.com/beeware/briefcase/issues/1839>`__, `#1840 <https://github.com/beeware/briefcase/issues/1840>`__, `#1841 <https://github.com/beeware/briefcase/issues/1841>`__, `#1842 <https://github.com/beeware/briefcase/issues/1842>`__, `#1843 <https://github.com/beeware/briefcase/issues/1843>`__, `#1847 <https://github.com/beeware/briefcase/issues/1847>`__, `#1850 <https://github.com/beeware/briefcase/issues/1850>`__, `#1851 <https://github.com/beeware/briefcase/issues/1851>`__, `#1853 <https://github.com/beeware/briefcase/issues/1853>`__, `#1857 <https://github.com/beeware/briefcase/issues/1857>`__, `#1860 <https://github.com/beeware/briefcase/issues/1860>`__, `#1863 <https://github.com/beeware/briefcase/issues/1863>`__, `#1867 <https://github.com/beeware/briefcase/issues/1867>`__, `#1869 <https://github.com/beeware/briefcase/issues/1869>`__, `#1871 <https://github.com/beeware/briefcase/issues/1871>`__, `#1872 <https://github.com/beeware/briefcase/issues/1872>`__, `#1873 <https://github.com/beeware/briefcase/issues/1873>`__, `#1874 <https://github.com/beeware/briefcase/issues/1874>`__
+
+
+0.3.18 (2024-05-06)
+===================
+
+Features
+--------
+
+* Existing projects with a ``pyproject.toml`` configuration can now be converted into Briefcase apps using the ``briefcase convert`` command. (`#1202 <https://github.com/beeware/briefcase/issues/1202>`__)
+* Apps packaged as AppImages are no longer dependent on ``libcrypt.so.1``. (`#1383 <https://github.com/beeware/briefcase/issues/1383>`__)
+* The ``briefcase run`` command now supports the ``--target`` option to run Linux apps from within Docker for other distributions. (`#1603 <https://github.com/beeware/briefcase/issues/1603>`__)
+* The hints and recommendations that Docker prints in the console are now silenced. (`#1635 <https://github.com/beeware/briefcase/issues/1635>`__)
+* In non-interactive environments, such as CI, a message is now printed to signify a task has begun where an animated bar would be displayed in interactive console sessions. (`#1649 <https://github.com/beeware/briefcase/issues/1649>`__)
+* Additional options can now be passed to the ``docker build`` command for building native Linux packages and AppImages via the ``--Xdocker-build`` argument. (`#1661 <https://github.com/beeware/briefcase/issues/1661>`__)
+* The contents of ``pyproject.toml`` is now included in the log file. (`#1674 <https://github.com/beeware/briefcase/issues/1674>`__)
+* When an app runs on an Android device or emulator, the logging output is now colored. (`#1676 <https://github.com/beeware/briefcase/issues/1676>`__)
+* When deep debug is activated via ``-vv``, ``pip`` now installs requirements for the app with verbose logging. (`#1708 <https://github.com/beeware/briefcase/issues/1708>`__)
+* The listing of filenames for updating permissions for building native Linux packages is now only shown when verbose logging is enabled via ``-v``. (`#1720 <https://github.com/beeware/briefcase/issues/1720>`__)
+* When a platform supports a splash screen, that splash screen will be generated automatically based on the app icon, rather than requiring additional configuration. (`#1737 <https://github.com/beeware/briefcase/issues/1737>`__)
+* New projects for Toga on GTK3 now recommend using ``gir1.2-webkit2-4.1`` instead of ``gir1.2-webkit2-4.0`` for ``WebView`` support. (`#1748 <https://github.com/beeware/briefcase/issues/1748>`__)
+
+
+Bugfixes
+--------
+
+* When Briefcase can't find ``rpmbuild`` on an RPM-based system, the message giving install instructions now uses the correct package name. (`#1638 <https://github.com/beeware/briefcase/issues/1638>`__)
+* Creating new projects is now compatible with cookiecutter v2.6.0. (`#1663 <https://github.com/beeware/briefcase/issues/1663>`__)
+* The minimum version of pip was bumped to 23.1.2 to ensure compatibility with Python 3.12. (`#1681 <https://github.com/beeware/briefcase/issues/1681>`__)
+* On Windows, the Android emulator will always open without needing to press CTRL-C. (`#1687 <https://github.com/beeware/briefcase/issues/1687>`__)
+* A spurious Android emulator named ``@INFO`` will no longer be included in the list of available emulators. (`#1697 <https://github.com/beeware/briefcase/issues/1697>`__)
+* The configuration generated for iOS apps declaring geolocation permissions has been corrected. (`#1713 <https://github.com/beeware/briefcase/issues/1713>`__)
+* When using ``-r/--update-requirements`` for building for Android, the app's requirements are always reinstalled now. (`#1721 <https://github.com/beeware/briefcase/issues/1721>`__)
+* When creating a new project, the validation for App Name now rejects all non-ASCII values. (`#1762 <https://github.com/beeware/briefcase/issues/1762>`__)
+* Packages created for OpenSUSE now depend on ``libcanberra-gtk3-module`` instead of ``libcanberra-gtk3-0``. (`#1774 <https://github.com/beeware/briefcase/issues/1774>`__)
+
+
+Backward Incompatible Changes
+-----------------------------
+
+* WiX v3.14.1 is now used to package Windows apps. Run ``briefcase upgrade wix`` to start using this version. (`#1707 <https://github.com/beeware/briefcase/issues/1707>`__)
+* Java JDK 17.0.11+9 is now used to package Android apps. Use ``briefcase upgrade java`` to update your Briefcase-installed JDK instance to this version. (`#1736 <https://github.com/beeware/briefcase/issues/1736>`__)
+* The ``splash`` configuration option will no longer be honored. Splash screens are now generated based on the icon image. (`#1737 <https://github.com/beeware/briefcase/issues/1737>`__)
+* iOS apps now require 640px, 1280px and 1920px icon image. (`#1737 <https://github.com/beeware/briefcase/issues/1737>`__)
+* Android apps now require an ``adaptive`` variant for icons. This requires 108px, 162px, 216px, 324px and 432px images with a transparent background. The Android ``square`` icon variant requires additional 320px, 480px, 640px, 960px and 1280px images. (`#1737 <https://github.com/beeware/briefcase/issues/1737>`__)
+
+Documentation
+-------------
+
+* The documentation contribution guide was updated to use a more authoritative reStructuredText reference. (`#1695 <https://github.com/beeware/briefcase/issues/1695>`__)
+* The README badges were updated to display correctly on GitHub. (`#1763 <https://github.com/beeware/briefcase/issues/1763>`__)
+
+Misc
+----
+
+* `#1428 <https://github.com/beeware/briefcase/issues/1428>`__, `#1495 <https://github.com/beeware/briefcase/issues/1495>`__, `#1637 <https://github.com/beeware/briefcase/issues/1637>`__, `#1639 <https://github.com/beeware/briefcase/issues/1639>`__, `#1642 <https://github.com/beeware/briefcase/issues/1642>`__, `#1643 <https://github.com/beeware/briefcase/issues/1643>`__, `#1644 <https://github.com/beeware/briefcase/issues/1644>`__, `#1645 <https://github.com/beeware/briefcase/issues/1645>`__, `#1646 <https://github.com/beeware/briefcase/issues/1646>`__, `#1652 <https://github.com/beeware/briefcase/issues/1652>`__, `#1653 <https://github.com/beeware/briefcase/issues/1653>`__, `#1656 <https://github.com/beeware/briefcase/issues/1656>`__, `#1657 <https://github.com/beeware/briefcase/issues/1657>`__, `#1658 <https://github.com/beeware/briefcase/issues/1658>`__, `#1659 <https://github.com/beeware/briefcase/issues/1659>`__, `#1660 <https://github.com/beeware/briefcase/issues/1660>`__, `#1666 <https://github.com/beeware/briefcase/issues/1666>`__, `#1671 <https://github.com/beeware/briefcase/issues/1671>`__, `#1672 <https://github.com/beeware/briefcase/issues/1672>`__, `#1679 <https://github.com/beeware/briefcase/issues/1679>`__, `#1683 <https://github.com/beeware/briefcase/issues/1683>`__, `#1684 <https://github.com/beeware/briefcase/issues/1684>`__, `#1686 <https://github.com/beeware/briefcase/issues/1686>`__, `#1689 <https://github.com/beeware/briefcase/issues/1689>`__, `#1690 <https://github.com/beeware/briefcase/issues/1690>`__, `#1691 <https://github.com/beeware/briefcase/issues/1691>`__, `#1692 <https://github.com/beeware/briefcase/issues/1692>`__, `#1694 <https://github.com/beeware/briefcase/issues/1694>`__, `#1699 <https://github.com/beeware/briefcase/issues/1699>`__, `#1700 <https://github.com/beeware/briefcase/issues/1700>`__, `#1701 <https://github.com/beeware/briefcase/issues/1701>`__, `#1702 <https://github.com/beeware/briefcase/issues/1702>`__, `#1710 <https://github.com/beeware/briefcase/issues/1710>`__, `#1711 <https://github.com/beeware/briefcase/issues/1711>`__, `#1712 <https://github.com/beeware/briefcase/issues/1712>`__, `#1716 <https://github.com/beeware/briefcase/issues/1716>`__, `#1717 <https://github.com/beeware/briefcase/issues/1717>`__, `#1722 <https://github.com/beeware/briefcase/issues/1722>`__, `#1723 <https://github.com/beeware/briefcase/issues/1723>`__, `#1725 <https://github.com/beeware/briefcase/issues/1725>`__, `#1730 <https://github.com/beeware/briefcase/issues/1730>`__, `#1731 <https://github.com/beeware/briefcase/issues/1731>`__, `#1732 <https://github.com/beeware/briefcase/issues/1732>`__, `#1741 <https://github.com/beeware/briefcase/issues/1741>`__, `#1742 <https://github.com/beeware/briefcase/issues/1742>`__, `#1743 <https://github.com/beeware/briefcase/issues/1743>`__, `#1744 <https://github.com/beeware/briefcase/issues/1744>`__, `#1745 <https://github.com/beeware/briefcase/issues/1745>`__, `#1752 <https://github.com/beeware/briefcase/issues/1752>`__, `#1753 <https://github.com/beeware/briefcase/issues/1753>`__, `#1754 <https://github.com/beeware/briefcase/issues/1754>`__, `#1756 <https://github.com/beeware/briefcase/issues/1756>`__, `#1757 <https://github.com/beeware/briefcase/issues/1757>`__, `#1758 <https://github.com/beeware/briefcase/issues/1758>`__, `#1759 <https://github.com/beeware/briefcase/issues/1759>`__, `#1760 <https://github.com/beeware/briefcase/issues/1760>`__, `#1761 <https://github.com/beeware/briefcase/issues/1761>`__, `#1766 <https://github.com/beeware/briefcase/issues/1766>`__, `#1769 <https://github.com/beeware/briefcase/issues/1769>`__, `#1775 <https://github.com/beeware/briefcase/issues/1775>`__, `#1776 <https://github.com/beeware/briefcase/issues/1776>`__
+
 0.3.17 (2024-02-06)
 ===================
 
@@ -412,12 +566,12 @@ Features
 --------
 
 * Apps can be updated as part of a call to package. (#473)
-* The Android emulator can now be used on Apple M1 hardware. (#616)
+* The Android emulator can now be used on Apple Silicon hardware. (#616)
 * Names that are reserved words in Python (or other common programming languages) are now prevented when creating apps. (#617)
 * Names that are invalid on Windows as filenames (such as CON and LPT0) are now invalid as app names. (#685)
 * Verbose logging via ``-v`` and ``-vv`` now includes the return code, output, and environment variables for shell commands (#704)
 * When the output of a wrapped command cannot be parsed, full command output, and failure reason is now logged. (#728)
-* The iOS emulator will now run apps natively on M1 hardware, rather than through Rosetta emulation. (#739)
+* The iOS emulator will now run apps natively on Apple Silicon hardware, rather than through Rosetta emulation. (#739)
 
 
 Bugfixes
@@ -427,7 +581,7 @@ Bugfixes
 * The error reporting when the user is on an unsupported platform or Python version has been improved. (#541)
 * When the formal name uses non-Latin characters, the suggested Class and App names are now valid. (#612)
 * The code signing process for macOS apps has been made more robust. (#652)
-* macOS app binaries are now adhoc signed by default, ensuring they can run on M1 hardware. (#664)
+* macOS app binaries are now adhoc signed by default, ensuring they can run on Apple Silicon hardware. (#664)
 * Xcode version checks are now more robust. (#668)
 * Android projects that have punctuation in their formal names can now build without error. (#696)
 * Bundle name validation no longer excludes valid country identifiers (like ``in.example``). (#709)

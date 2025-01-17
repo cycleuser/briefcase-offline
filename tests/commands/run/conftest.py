@@ -60,6 +60,7 @@ class DummyRunCommand(RunCommand):
         kwargs.pop("update_requirements", None)
         kwargs.pop("update_resources", None)
         kwargs.pop("update_support", None)
+        kwargs.pop("update_stub", None)
         kwargs.pop("no_update", None)
         kwargs.pop("test_mode", None)
         kwargs.pop("passthrough", None)
@@ -80,6 +81,7 @@ class DummyRunCommand(RunCommand):
         kwargs.pop("update_requirements", None)
         kwargs.pop("update_resources", None)
         kwargs.pop("update_support", None)
+        kwargs.pop("update_stub", None)
         kwargs.pop("test_mode", None)
         return full_options({"update_state": app.app_name}, kwargs)
 
@@ -90,6 +92,7 @@ class DummyRunCommand(RunCommand):
         kwargs.pop("update_requirements", None)
         kwargs.pop("update_resources", None)
         kwargs.pop("update_support", None)
+        kwargs.pop("update_stub", None)
         kwargs.pop("no_update", None)
         kwargs.pop("test_mode", None)
         return full_options({"build_state": app.app_name}, kwargs)
@@ -108,6 +111,7 @@ def first_app_config():
         version="0.0.1",
         description="The first simple app",
         sources=["src/first"],
+        license={"file": "LICENSE"},
     )
 
 
@@ -150,6 +154,7 @@ def second_app_config():
         version="0.0.2",
         description="The second simple app",
         sources=["src/second"],
+        license={"file": "LICENSE"},
     )
 
 

@@ -2,7 +2,7 @@ from briefcase.bootstraps.base import BaseGuiBootstrap
 
 
 class PygameGuiBootstrap(BaseGuiBootstrap):
-    display_name_annotation = "does not support iOS/Android deployment"
+    display_name_annotation = "does not support iOS/Android/Web deployment"
 
     def app_source(self):
         return """\
@@ -35,11 +35,6 @@ def main():
 
     os.environ["SDL_VIDEO_X11_WMCLASS"] = metadata["Formal-Name"]
 
-    # Set the app's runtime icon
-    pygame.display.set_icon(
-        pygame.image.load(Path(__file__).parent / "resources/{{ cookiecutter.app_name }}.png")
-    )
-
     pygame.init()
     pygame.display.set_caption(metadata["Formal-Name"])
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -59,33 +54,32 @@ def main():
 
     def pyproject_table_briefcase_app_extra_content(self):
         return """
-
 requires = [
-    "pygame~=2.2",
+    "pygame~=2.6",
 ]
 test_requires = [
-{%- if cookiecutter.test_framework == "pytest" %}
+{% if cookiecutter.test_framework == "pytest" %}
     "pytest",
-{%- endif %}
+{% endif %}
 ]
 """
 
     def pyproject_table_macOS(self):
-        return """
+        return """\
 universal_build = true
 requires = [
-    "std-nslog~=1.0.0",
+    "std-nslog~=1.0.3",
 ]
 """
 
     def pyproject_table_linux(self):
-        return """
+        return """\
 requires = [
 ]
 """
 
     def pyproject_table_linux_system_debian(self):
-        return """
+        return """\
 system_requires = [
 ]
 
@@ -94,7 +88,7 @@ system_runtime_requires = [
 """
 
     def pyproject_table_linux_system_rhel(self):
-        return """
+        return """\
 system_requires = [
 ]
 
@@ -103,7 +97,7 @@ system_runtime_requires = [
 """
 
     def pyproject_table_linux_system_suse(self):
-        return """
+        return """\
 system_requires = [
 ]
 
@@ -112,7 +106,7 @@ system_runtime_requires = [
 """
 
     def pyproject_table_linux_system_arch(self):
-        return """
+        return """\
 system_requires = [
 ]
 
@@ -121,7 +115,7 @@ system_runtime_requires = [
 """
 
     def pyproject_table_linux_appimage(self):
-        return """
+        return """\
 manylinux = "manylinux_2_28"
 
 system_requires = [
@@ -132,29 +126,29 @@ linuxdeploy_plugins = [
 """
 
     def pyproject_table_linux_flatpak(self):
-        return """
+        return """\
 flatpak_runtime = "org.freedesktop.Platform"
-flatpak_runtime_version = "23.08"
+flatpak_runtime_version = "24.08"
 flatpak_sdk = "org.freedesktop.Sdk"
 """
 
     def pyproject_table_windows(self):
-        return """
+        return """\
 requires = [
 ]
 """
 
     def pyproject_table_iOS(self):
-        return """
+        return """\
 supported = false
 """
 
     def pyproject_table_android(self):
-        return """
+        return """\
 supported = false
 """
 
     def pyproject_table_web(self):
-        return """
+        return """\
 supported = false
 """

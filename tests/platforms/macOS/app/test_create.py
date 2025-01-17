@@ -1,5 +1,7 @@
+import os
 import subprocess
 import sys
+import time
 from unittest import mock
 
 import pytest
@@ -71,7 +73,9 @@ def create_command(tmp_path, first_app_templated):
             {},
             {},
             {
-                "info": {},
+                "info": {
+                    "NSCameraUsageDescription": "I need to see you",
+                },
                 "entitlements": {
                     "com.apple.security.cs.allow-unsigned-executable-memory": True,
                     "com.apple.security.cs.disable-library-validation": True,
@@ -87,7 +91,9 @@ def create_command(tmp_path, first_app_templated):
             {},
             {},
             {
-                "info": {},
+                "info": {
+                    "NSMicrophoneUsageDescription": "I need to hear you",
+                },
                 "entitlements": {
                     "com.apple.security.cs.allow-unsigned-executable-memory": True,
                     "com.apple.security.cs.disable-library-validation": True,
@@ -234,7 +240,9 @@ def create_command(tmp_path, first_app_templated):
             {},
             {},
             {
-                "info": {},
+                "info": {
+                    "NSPhotoLibraryUsageDescription": "I need to see your library",
+                },
                 "entitlements": {
                     "com.apple.security.cs.allow-unsigned-executable-memory": True,
                     "com.apple.security.cs.disable-library-validation": True,
@@ -283,6 +291,28 @@ def test_permissions_context(
     x_permissions = create_command._x_permissions(first_app)
     # Check that the final platform permissions are rendered as expected.
     assert context == create_command.permissions_context(first_app, x_permissions)
+
+
+def test_install_app_resources(create_command, first_app_templated, tmp_path):
+    """The app bundle's modification time is updated when app resources are
+    installed."""
+    # Get the initial app modification time
+    initial_timestamp = os.path.getmtime(
+        create_command.binary_path(first_app_templated)
+    )
+
+    # Add a small sleep to make sure that a touch will definitely result in an updated
+    # modification time
+    time.sleep(0.1)
+
+    # Install resources
+    create_command.install_app_resources(first_app_templated)
+
+    # Modification time has been updated, and is newer
+    assert (
+        os.path.getmtime(create_command.binary_path(first_app_templated))
+        > initial_timestamp
+    )
 
 
 @pytest.mark.parametrize(
@@ -679,25 +709,30 @@ def test_install_app_packages_non_universal(
     create_command.merge_app_packages.assert_not_called()
 
 
-@pytest.mark.parametrize("universal_build", [True, False])
 @pytest.mark.parametrize("pre_existing", [True, False])
-def test_install_support_package(
+def test_install_legacy_support_package(
     create_command,
     first_app_templated,
     tmp_path,
     pre_existing,
-    universal_build,
 ):
-    """The standard library is copied out of the support package into the app bundle."""
+    """The legacy location for the standard library is used by default when installing
+    the support package."""
     # Hard code the support revision
     first_app_templated.support_revision = "37"
 
-    first_app_templated.universal_build = universal_build
-
-    create_command.tools.host_arch = "gothic"
-
-    # Mock the thin command so we can confirm if it was invoked.
-    create_command.ensure_thin_binary = mock.Mock()
+    # Rewrite the app's briefcase.toml to use the legacy paths (i.e.,
+    # a support path of Resources/support, and no stdlib_path)
+    create_file(
+        tmp_path / "base_path/build/first-app/macos/app/briefcase.toml",
+        """
+[paths]
+app_packages_path="First App.app/Contents/Resources/app_packages"
+support_path="First App.app/Contents/Resources/support"
+info_plist_path="First App.app/Contents/Info.plist"
+entitlements_path="Entitlements.plist"
+""",
+    )
 
     bundle_path = tmp_path / "base_path/build/first-app/macos/app"
     runtime_support_path = bundle_path / "First App.app/Contents/Resources/support"
@@ -705,11 +740,11 @@ def test_install_support_package(
     if pre_existing:
         create_file(
             runtime_support_path / "python-stdlib/old-stdlib",
-            "Legacy stdlib file",
+            "old stdlib file",
         )
 
     # Mock download.file to return a support package
-    create_command.tools.download.file = mock.MagicMock(
+    create_command.tools.file.download = mock.MagicMock(
         side_effect=mock_tgz_download(
             f"Python-3.{sys.version_info.minor}-macOS-support.b37.tar.gz",
             [
@@ -754,11 +789,88 @@ def test_install_support_package(
     # The legacy content has been purged
     assert not (runtime_support_path / "python-stdlib/old-stdlib").exists()
 
-    # Only thin if this is a non-universal app
-    if universal_build:
-        create_command.ensure_thin_binary.assert_not_called()
-    else:
-        create_command.ensure_thin_binary.assert_called_once_with(
-            bundle_path / "First App.app/Contents/MacOS/First App",
-            arch="gothic",
+
+@pytest.mark.parametrize("pre_existing", [True, False])
+def test_install_support_package(
+    create_command,
+    first_app_templated,
+    tmp_path,
+    pre_existing,
+):
+    """The Python framework is copied out of the support package into the app bundle."""
+    # Hard code the support revision
+    first_app_templated.support_revision = "37"
+
+    bundle_path = tmp_path / "base_path/build/first-app/macos/app"
+    runtime_support_path = bundle_path / "First App.app/Contents/Frameworks"
+
+    if pre_existing:
+        create_file(
+            runtime_support_path / "Python.framework/old-Python",
+            "Old library",
         )
+
+    # Mock download.file to return a support package
+    create_command.tools.file.download = mock.MagicMock(
+        side_effect=mock_tgz_download(
+            f"Python-3.{sys.version_info.minor}-macOS-support.b37.tar.gz",
+            content=[
+                ("VERSIONS", "Version tracking info"),
+                (
+                    "platform-site/macosx.arm64/sitecustomize.py",
+                    "this is the arm64 platform site",
+                ),
+                (
+                    "platform-site/macosx.x86_64/sitecustomize.py",
+                    "this is the x86_64 platform site",
+                ),
+                ("Python.xcframework/Info.plist", "this is the xcframework"),
+                (
+                    "Python.xcframework/macos-arm64_x86_64/Python.framework/Versions/Current/Python",
+                    "this is the library",
+                ),
+            ],
+            links=[
+                (
+                    "Python.xcframework/macos-arm64_x86_64/Python.framework/Python",
+                    "Versions/Current/Python",
+                ),
+            ],
+        )
+    )
+
+    # Install the support package
+    create_command.install_app_support_package(first_app_templated)
+
+    # Confirm that the support files have been unpacked into the bundle location
+    assert (bundle_path / "support/VERSIONS").exists()
+    assert (
+        bundle_path / "support/platform-site/macosx.arm64/sitecustomize.py"
+    ).exists()
+    assert (
+        bundle_path / "support/platform-site/macosx.x86_64/sitecustomize.py"
+    ).exists()
+    assert (bundle_path / "support/Python.xcframework/Info.plist").exists()
+    assert (
+        bundle_path
+        / "support/Python.xcframework/macos-arm64_x86_64/Python.framework/Versions/Current/Python"
+    ).is_file()
+    assert (
+        bundle_path
+        / "support/Python.xcframework/macos-arm64_x86_64/Python.framework/Python"
+    ).is_symlink()
+
+    # The standard library has been copied to the app...
+    assert (runtime_support_path / "Python.framework/Versions/Current/Python").is_file()
+    assert (runtime_support_path / "Python.framework/Python").is_symlink()
+    # ... but the other support files have not.
+    assert not (
+        runtime_support_path / "platform-site/macosx.arm64/sitecustomize.py"
+    ).exists()
+    assert not (
+        runtime_support_path / "platform-site/macosx.x86_64/sitecustomize.py"
+    ).exists()
+    assert not (runtime_support_path / "VERSIONS").exists()
+
+    # The legacy content has been purged
+    assert not (runtime_support_path / "python-stdlib/old-Python").exists()

@@ -6,6 +6,7 @@ Command reference
    :maxdepth: 1
 
    new
+   convert
    dev
    create
    update
@@ -79,7 +80,8 @@ to increase the verbosity:
   Briefcase operation. This includes the command line, environment, output and return
   value of every tool and command that Briefcase executes as part of a build.
 * ``-vvv`` generates **deep debug** output. This will include the verbose output of
-  all commands that Briefcase has invoked.
+  all commands that Briefcase has invoked. Any commands that Briefcase is able to run
+  in parallel will be run sequentially.
 
 ``-V`` / ``--version``
 ----------------------

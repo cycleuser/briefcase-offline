@@ -173,6 +173,11 @@ class TrackingCreateCommand(DummyCreateCommand):
     def install_app_resources(self, app):
         self.actions.append(("resources", app.app_name))
 
+    def install_stub_binary(self, app):
+        self.actions.append(("stub", app.app_name))
+        # A mock version of a stub binary
+        create_file(self.bundle_path(app) / "Stub.bin", "stub binary")
+
     def cleanup_app_content(self, app):
         self.actions.append(("cleanup", app.app_name))
 
@@ -199,6 +204,7 @@ def tracking_create_command(tmp_path, mock_git, monkeypatch_tool_host_os):
                 version="0.0.1",
                 description="The first simple app",
                 sources=["src/first"],
+                license={"file": "LICENSE"},
             ),
             "second": AppConfig(
                 app_name="second",
@@ -206,6 +212,7 @@ def tracking_create_command(tmp_path, mock_git, monkeypatch_tool_host_os):
                 version="0.0.2",
                 description="The second simple app",
                 sources=["src/second"],
+                license={"file": "LICENSE"},
             ),
         },
     )
@@ -223,6 +230,7 @@ def myapp():
         url="https://example.com",
         author="First Last",
         author_email="first@example.com",
+        license={"file": "LICENSE"},
     )
 
 
@@ -267,6 +275,21 @@ def app_requirements_path_index(bundle_path):
 
 
 @pytest.fixture
+def app_requirement_installer_args_path_index(bundle_path):
+    with (bundle_path / "briefcase.toml").open("wb") as f:
+        index = {
+            "paths": {
+                "app_path": "path/to/app",
+                "app_requirements_path": "path/to/requirements.txt",
+                "app_requirement_installer_args_path": "path/to/installer-args.txt",
+                "support_path": "path/to/support",
+                "support_revision": 37,
+            }
+        }
+        tomli_w.dump(index, f)
+
+
+@pytest.fixture
 def no_support_revision_index(bundle_path):
     with (bundle_path / "briefcase.toml").open("wb") as f:
         index = {
@@ -302,6 +325,11 @@ def app_requirements_path(bundle_path):
 
 
 @pytest.fixture
+def app_requirement_installer_args_path(bundle_path):
+    return bundle_path / "path/to/installer-args.txt"
+
+
+@pytest.fixture
 def app_packages_path(bundle_path):
     return bundle_path / "path/to/app_packages"
 
@@ -309,3 +337,16 @@ def app_packages_path(bundle_path):
 @pytest.fixture
 def app_path(bundle_path):
     return bundle_path / "path/to/app"
+
+
+@pytest.fixture
+def stub_binary_revision_path_index(bundle_path):
+    with (bundle_path / "briefcase.toml").open("wb") as f:
+        index = {
+            "paths": {
+                "app_path": "path/to/app",
+                "app_requirements_path": "path/to/requirements.txt",
+                "stub_binary_revision": 37,
+            }
+        }
+        tomli_w.dump(index, f)

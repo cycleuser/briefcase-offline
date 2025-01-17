@@ -207,8 +207,8 @@ to identify a specific compiled version of an application.
 
 A list of strings describing paths that will be *removed* from the project after
 the installation of the support package and app code. The paths provided will be
-interpreted relative to the app bundle folder (e.g., the ``macOS/app/My App``
-folder in the case of a macOS app).
+interpreted relative to the platform-specific build folder generated for the app
+(e.g., the ``build/my-app/macOS/app`` folder in the case of a macOS app).
 
 Paths can be:
  * An explicit reference to a single file
@@ -236,6 +236,16 @@ on an app with a formal name of "My App" would remove:
 2. The directory ``path/to/unneeded_directory``
 3. Any ``.exe`` file in ``path`` or its subdirectories.
 4. The file ``My App/content/extra.doc``.
+
+``console_app``
+~~~~~~~~~~~~~~~
+
+A Boolean describing if the app is a console app, or a GUI app. Defaults to ``False``
+(producing a GUI app). This setting has no effect on platforms that do not support a
+console mode (e.g., web or mobile platforms). On platforms that do support console apps,
+the resulting app will write output directly to ``stdout``/``stderr`` (rather than
+writing to a system log), creating a terminal window to display this output (if the
+platform allows).
 
 ``exit_regex``
 ~~~~~~~~~~~~~~
@@ -287,9 +297,9 @@ be appended when the application is built.
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 A path, relative to the directory where the ``pyproject.toml`` file is located,
-to an image to use as the background for the installer. As with ``splash``, the
-path should *exclude* the extension, and a platform-appropriate extension will
-be appended when the application is built.
+to an image to use as the background for the installer. The path should
+*exclude* the extension, and a platform-appropriate extension will be appended
+when the application is built.
 
 ``long_description``
 ~~~~~~~~~~~~~~~~~~~~
@@ -298,6 +308,59 @@ A longer description of the purpose of the application. This description can be
 multiple paragraphs, if necessary. The long description *must not* be a copy of
 the ``description``, or include the ``description`` as the first line of the
 ``long_description``.
+
+``requirement_installer_args``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A list of strings of arguments to pass to the requirement installer when building the
+app.
+
+Strings will be automatically transformed to absolute paths if they appear to be
+relative paths (i.e., starting with ``./`` or ``../``) and resolve to an existing path
+relative to the app's configuration file. This is done to support build targets where
+the requirement installer command does not run with the same working directory as the
+configuration file.
+
+If you encounter a false-positive and need to prevent this transformation,
+you may do so by using a single string for the argument name and the value.
+Arguments starting with ``-`` will never be transformed, even if they happen to resolve
+to an existing path relative to the configuration file.
+
+The following examples will have the relative path transformed to an absolute one when
+Briefcase runs the requirement installation command if the path ``wheels`` exists
+relative to the configuration file:
+
+.. code-block:: TOML
+
+    requirement_installer_args = ["--find-links", "./wheels"]
+
+    requirement_installer_args = ["-f", "../wheels"]
+
+On the other hand, the next two examples avoid it because the string starts with ``-``,
+does not start with a relative path indication (``./`` or ``../``), or do not resolve
+to an existing path:
+
+.. code-block:: TOML
+
+    requirement_installer_args = ["-f./wheels"]
+
+    requirement_installer_args = ["--find-links=./wheels"]
+
+    requirement_installer_args = ["-f", "wheels"]
+
+    requirement_installer_args = ["-f", "./this/path/does/not/exist"]
+
+.. admonition:: Supported arguments
+
+    The arguments supported in ``requirement_installer_args`` depend on the requirement
+    installer backend.
+
+    The only currently supported requirement installer is ``pip``. As such, the list
+    should only contain valid
+    arguments to the ``pip install`` command.
+
+    Briefcase does not validate the inputs to this configuration, and will only report
+    errors directly indicated by the requirement installer backend.
 
 ``primary_color``
 ~~~~~~~~~~~~~~~~~
@@ -313,6 +376,9 @@ A hexadecimal RGB color value (e.g., ``#008577``) used alongside the primary
 color. This setting is only used if the platform allows color modification,
 otherwise it is ignored.
 
+
+.. _configuration-requires-key:
+
 ``requires``
 ~~~~~~~~~~~~
 
@@ -324,47 +390,40 @@ application level, *and* platform level, the final set of requirements will be
 the *concatenation* of requirements from all levels, starting from least to
 most specific.
 
+Any PEP 508 version specifier is legal. For example:
+
+* Bare package name::
+
+    requires = ["pillow"]
+
+* Package name with version specifier::
+
+    requires = ["pillow==9.1.0"]
+
+* Install from source using the ``--no-binary`` entry::
+
+    requires = [
+        "pillow==9.1.0",
+        "--no-binary", "pillow",
+    ]
+
+* Git repository::
+
+    requires=["git+https://github.com/beeware/briefcase.git"]
+
+* Local directory::
+
+    requires=["mysrc/myapp"]
+
+* Local wheel file::
+
+    requires=["fullpath/wheelfile.whl"]
+
 ``revision``
 ~~~~~~~~~~~~
 
 An identifier used to differentiate specific builds of the same version of an
 app. Defaults to ``1`` if not provided.
-
-``splash``
-~~~~~~~~~~
-
-A path, relative to the directory where the ``pyproject.toml`` file is located,
-to an image to use as the splash screen for the application. The path should
-*exclude* the extension; Briefcase will append a platform appropriate extension
-when configuring the application.
-
-Some platforms require multiple splash images, at different sizes; these will
-be handled by appending the required size to the provided icon name. For
-example, iOS requires multiple splash images, (1024px, 2048px and 3072px);
-with a ``splash`` setting of ``resources/my_splash``, Briefcase will look for
-``resources/my_splash-1024.png``, ``resources/my_splash-2045.png``, and
-``resources/my_splash-3072.png``. The sizes that are required are determined
-by the platform template.
-
-Some platforms also require different *variants*. For example, Android requires
-splash screens for ``normal``, ``large`` and ``xlarge`` devices. These variants
-can be specified by qualifying the splash specification::
-
-    splash.normal = "resource/normal-splash"
-    splash.large = "resource/large-splash"
-    splash.xlarge = "resource/xlarge-splash"
-
-These settings can, if you wish, all use the same prefix.
-
-If the platform requires different sizes for each variant (as Android does),
-those size will be appended to path provided by the variant specifier. For
-example, using the previous example, Android would look for
-``resource/normal-splash-320.png``,  ``resource/normal-splash-480.png``,
-``resource/large-splash.480.png``, ``resource/xlarge-splash-720.png``, amongst
-others.
-
-If the platform output format does not use a splash screen, the ``splash``
-setting is ignored.
 
 ``splash_background_color``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -374,6 +433,26 @@ color for splash screens.
 
 If the platform output format does not use a splash screen, this setting is
 ignored.
+
+``stub_binary``
+~~~~~~~~~~~~~~~
+
+A file path or URL pointing at a pre-compiled binary (or a zip/tarball of a binary) that
+can be used as an entry point for a bundled application.
+
+If this setting is not provided, and a stub binary is required by the platform,
+Briefcase will use the default stub binary for the platform.
+
+``stub_binary_revision``
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The specific revision of the stub binary that should be used. By default, Briefcase will
+use the stub binary revision nominated by the application template. If you specify a
+stub binary revision, that will override the revision nominated by the application
+template.
+
+If you specify an explicit stub binary (using the ``stub_binary`` setting), this
+argument is ignored.
 
 ``support_package``
 ~~~~~~~~~~~~~~~~~~~
@@ -438,6 +517,8 @@ level, application level, *and* platform level, the final set of requirements
 will be the *concatenation* of requirements from all levels, starting from least
 to most specific.
 
+See :ref:`requires <configuration-requires-key>` for examples.
+
 ``test_sources``
 ~~~~~~~~~~~~~~~~
 
@@ -470,17 +551,17 @@ starting from least to most specific, with the most specific taking priority.
 
 Briefcase maintains a set of cross-platform permissions:
 
-* ``permission.camera`` - permission to access to the camera to take photos or video.
+* ``permission.camera`` - permission to access the camera to take photos or video.
 * ``permission.microphone`` - permission to access the microphone.
 * ``permission.coarse_location`` - permission to determine a rough GPS location.
 * ``permission.fine_location`` - permission to determine a precise GPS location.
 * ``permission.background_location`` - permission to track GPS location while in the background.
-* ``permission.photo_library`` - permission to access to the user's photo library.
+* ``permission.photo_library`` - permission to access the user's photo library.
 
 If a cross-platform permission is used, it will be mapped to platform-specific values in
 whatever files are used to define permissions on that platform.
 
-Permissions can also be configured by adding platform-specific configuration items. See the documentation for the the platform backends to see the options that are available.
+Permissions can also be configured by adding platform-specific configuration items. See the documentation for the platform backends to see the available options.
 
 The value for each permission is a short description of why that permission is required.
 If the platform requires, the value may be displayed to the user as part of an
@@ -498,15 +579,14 @@ handlers for specific document types by adding a ``document_type``
 configuration section for each document type the application can support. This
 section follows the format:
 
-    ``[tool.briefcase.app.<app name>.document_type.<extension>]``
+    ``[tool.briefcase.app.<app name>.document_type.<document type id>]``
 
-or, for a platform specific definition:
+or, for a platform-specific definition:
 
-    ``[tool.briefcase.app.<app name>.<platform>.document_type.<extension>]``
+    ``[tool.briefcase.app.<app name>.<platform>.document_type.<document type id>]``
 
-where ``extension`` is the file extension to register. For example, ``myapp``
-could register as a handler for PNG image files by defining the configuration
-section ``[tool.briefcase.app.myapp.document_type.png]``.
+The ``document type id`` is an identifier, in alphanumeric format. It is appended to the app id of an application to identify documents of the same type.
+
 
 The document type declaration requires the following settings:
 
@@ -515,13 +595,19 @@ The document type declaration requires the following settings:
 
 A short, one-line description of the document format.
 
+``extension``
+---------------
+
+The ``extension`` is the file extension to register. For example, ``myapp``
+could register as a handler for PNG image files by defining the configuration
+section ``[tool.briefcase.app.myapp.document_type.png]``.
+
 ``icon``
 --------
 
 A path, relative to the directory where the ``pyproject.toml`` file is located,
 to an image for an icon to register for use with documents of this type. The
-path should *exclude* the extension; Briefcase will append a platform
-appropriate extension when configuring the application. For example, an icon
+path should *exclude* the extension; Briefcase will append a platform-appropriate extension when configuring the application. For example, an icon
 specification of::
 
     icon = "resources/icon"
@@ -578,3 +664,5 @@ available:
   cumulative setting.
 * ``text`` in a ``[project.license]`` section will be mapped to ``license``.
 * ``homepage`` in a ``[project.urls]`` section will be mapped to ``url``.
+* ``requires-python`` will be used to validate the running Python interpreter's
+  version against the requirement.

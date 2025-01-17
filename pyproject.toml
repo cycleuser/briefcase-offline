@@ -1,8 +1,8 @@
 [build-system]
 requires = [
     # keep versions in sync with automation/pyproject.toml
-    "setuptools==69.2.0",
-    "setuptools_scm==8.0.4",
+    "setuptools==75.8.0",
+    "setuptools_scm==8.1.0",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -11,7 +11,7 @@ dynamic = ["version"]
 name = "briefcase"
 description = "Tools to support converting a Python project into a standalone native application."
 readme = "README.rst"
-requires-python = ">= 3.8"
+requires-python = ">= 3.9"
 license.text = "New BSD"
 authors = [
     {name="Russell Keith-Magee", email="russell@keith-magee.com"},
@@ -48,7 +48,6 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -68,8 +67,8 @@ dependencies = [
     #
     # limited to <=3.9 for the `group` argument for `entry_points()`
     "importlib_metadata >= 4.4; python_version <= '3.9'",
-    "packaging >= 22.0",
-    "pip >= 23.1.2",
+    "packaging >= 24.2",
+    "pip >= 24.3",
     "setuptools >= 60",
     "wheel >= 0.37",
     "build >= 0.10",
@@ -80,13 +79,13 @@ dependencies = [
     # If the package uses calver, we don't pin the upper version, as the upper version
     # provides no basis for determining API stability.
     #
-    "cookiecutter >= 2.3.1, < 2.6.0",  # See beeware/briefcase#1663 to bump <2.6.0 pin
-    "dmgbuild >= 1.6, < 2.0; sys_platform == 'darwin'",
+    "cookiecutter >= 2.6.0, < 3.0",
+    "dmgbuild >= 1.6.4, < 2.0; sys_platform == 'darwin'",
     "GitPython >= 3.1, < 4.0",
     "platformdirs >= 2.6, < 5.0",
-    "psutil >= 5.9, < 6.0",
+    "psutil >= 5.9, < 7.0",
     "python-dateutil >= 2.9.0.post0",  # transitive dependency (beeware/briefcase#1428)
-    "requests >= 2.28, < 3.0",
+    "httpx >= 0.20, < 1.0",
     "rich >= 12.6, < 14.0",
     "tomli >= 2.0, < 3.0; python_version <= '3.10'",
     "tomli_w >= 1.0, < 2.0",
@@ -96,28 +95,24 @@ dependencies = [
 # Extras used by developers *of* briefcase are pinned to specific versions to
 # ensure environment consistency.
 dev = [
-    "coverage[toml] == 7.4.4",
+    "coverage[toml] == 7.6.10",
     "coverage-conditional-plugin == 0.9.0",
-    # Pre-commit 3.6.0 deprecated support for Python 3.8
-    "pre-commit == 3.5.0 ; python_version < '3.9'",
-    "pre-commit == 3.7.0 ; python_version >= '3.9'",
-    "pytest == 8.1.1",
-    "pytest-xdist == 3.5.0",
-    "setuptools_scm == 8.0.4",
-    "tox == 4.14.2",
+    "pre-commit == 4.0.1",
+    "pytest == 8.3.4",
+    "pytest-xdist == 3.6.1",
+    "setuptools_scm == 8.1.0",
+    "tox == 4.23.2",
 ]
+# Docs are always built on a specific Python version; see RTD and tox config files,
+# and the docs contribution guide.
 docs = [
-    "furo == 2024.1.29",
+    "furo == 2024.8.6",
     "pyenchant == 3.2.2",
-    # Sphinx 7.2 deprecated support for Python 3.8
-    "sphinx == 7.1.2 ; python_version < '3.9'",
-    "sphinx == 7.2.6 ; python_version >= '3.9'",
-    "sphinx_tabs == 3.4.5",
-    # Sphinx 2024.2.4 deprecated support for Python 3.8
-    "sphinx-autobuild == 2021.3.14 ; python_version < '3.9'",
-    "sphinx-autobuild == 2024.2.4 ; python_version >= '3.9'",
+    "sphinx == 8.1.3",
+    "sphinx_tabs == 3.4.7",
+    "sphinx-autobuild == 2024.10.3",
     "sphinx-copybutton == 0.5.2",
-    "sphinxcontrib-spelling == 8.0.0",
+    "sphinxcontrib-spelling == 8.0.1",
 ]
 
 [project.urls]
@@ -132,8 +127,8 @@ briefcase = "briefcase.__main__:main"
 
 [project.entry-points."briefcase.bootstraps"]
 Toga = "briefcase.bootstraps.toga:TogaGuiBootstrap"
+Console = "briefcase.bootstraps.console:ConsoleBootstrap"
 PySide6 = "briefcase.bootstraps.pyside6:PySide6GuiBootstrap"
-PursuedPyBear = "briefcase.bootstraps.pursuedpybear:PursuedPyBearGuiBootstrap"
 Pygame = "briefcase.bootstraps.pygame:PygameGuiBootstrap"
 
 [project.entry-points."briefcase.platforms"]
@@ -211,6 +206,7 @@ no-cover-if-is-macos = "'darwin' == os_environ.get('COVERAGE_PLATFORM', sys_plat
 no-cover-if-not-macos = "'darwin' != os_environ.get('COVERAGE_PLATFORM', sys_platform) and os_environ.get('COVERAGE_EXCLUDE_PLATFORM') != 'disable'"
 no-cover-if-is-windows = "'win32' == os_environ.get('COVERAGE_PLATFORM', sys_platform) and os_environ.get('COVERAGE_EXCLUDE_PLATFORM') != 'disable'"
 no-cover-if-not-windows = "'win32' != os_environ.get('COVERAGE_PLATFORM', sys_platform) and os_environ.get('COVERAGE_EXCLUDE_PLATFORM') != 'disable'"
+no-cover-if-gte-py312 = "sys_version_info > (3, 12) and os_environ.get('COVERAGE_EXCLUDE_PYTHON_VERSION') != 'disable'"
 no-cover-if-is-py312 = "python_version == '3.12' and os_environ.get('COVERAGE_EXCLUDE_PYTHON_VERSION') != 'disable'"
 no-cover-if-lt-py312 = "sys_version_info < (3, 12) and os_environ.get('COVERAGE_EXCLUDE_PYTHON_VERSION') != 'disable'"
 no-cover-if-lt-py311 = "sys_version_info < (3, 11) and os_environ.get('COVERAGE_EXCLUDE_PYTHON_VERSION') != 'disable'"
@@ -254,7 +250,7 @@ type = [
     { directory = "removal", name = "Backward Incompatible Changes", showcontent = true },
     { directory = "doc", name = "Documentation", showcontent = true },
     { directory = "misc", name = "Misc", showcontent = false },
- ]
+]
 
 [tool.codespell]
 skip = '.git,*.pdf,*.svg'

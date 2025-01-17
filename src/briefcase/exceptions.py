@@ -26,6 +26,17 @@ class NoCommandError(HelpText):
         return self.msg
 
 
+class InvalidPlatformError(BriefcaseError):
+    def __init__(self, requested, choices):
+        super().__init__(error_code=-20, skip_logfile=True)
+        self.requested = requested
+        self.choices = choices
+
+    def __str__(self):
+        choices = ", ".join(sorted(self.choices, key=str.lower))
+        return f"Invalid platform {self.requested!r}; (choose from: {choices})"
+
+
 class InvalidFormatError(BriefcaseError):
     def __init__(self, requested, choices):
         super().__init__(error_code=-21, skip_logfile=True)
@@ -34,7 +45,7 @@ class InvalidFormatError(BriefcaseError):
 
     def __str__(self):
         choices = ", ".join(sorted(self.choices, key=str.lower))
-        return f"Invalid format '{self.requested}'; (choose from: {choices})"
+        return f"Invalid format {self.requested!r}; (choose from: {choices})"
 
 
 class UnsupportedCommandError(BriefcaseError):
@@ -79,9 +90,12 @@ class BriefcaseCommandError(BriefcaseError):
 
 
 class NetworkFailure(BriefcaseCommandError):
-    def __init__(self, action):
+    DEFAULT_HINT = "is your computer offline?"
+
+    def __init__(self, action, hint=None):
         self.action = action
-        super().__init__(msg=f"Unable to {action}; is your computer offline?")
+        self.hint = hint if hint else self.DEFAULT_HINT
+        super().__init__(msg=f"Unable to {action}; {self.hint}")
 
 
 class MissingNetworkResourceError(BriefcaseCommandError):
@@ -126,11 +140,12 @@ class UpgradeToolError(BriefcaseCommandError):
         super().__init__(msg=error_msg, skip_logfile=True)
 
 
-class TemplateUnsupportedVersion(BriefcaseCommandError):
-    def __init__(self, briefcase_version):
-        self.briefcase_version = briefcase_version
+class InvalidTemplateBranch(BriefcaseCommandError):
+    def __init__(self, template_repo, branch):
+        self.template_repo = template_repo
+        self.branch = branch
         super().__init__(
-            f"Could not find a template branch for Briefcase {briefcase_version}."
+            f"Could not find a branch named {branch!r} in template repository {template_repo!r}."
         )
 
 
@@ -156,12 +171,18 @@ requirements (e.g., the GUI library) doesn't support {platform}.
 class InvalidSupportPackage(BriefcaseCommandError):
     def __init__(self, filename):
         self.filename = filename
-        super().__init__(f"Unable to unpack support package {filename!r}")
+        super().__init__(f"Unable to unpack support package {str(filename)!r}.")
+
+
+class InvalidStubBinary(BriefcaseCommandError):
+    def __init__(self, filename):
+        self.filename = filename
+        super().__init__(f"Unable to unpack or copy stub binary {str(filename)!r}.")
 
 
 class MissingAppMetadata(BriefcaseCommandError):
     def __init__(self, app_bundle_path):
-        super().__init__(f"Unable to find '{app_bundle_path / 'briefcase.toml'}'")
+        super().__init__(f"Unable to find {str(app_bundle_path / 'briefcase.toml')!r}")
 
 
 class MissingSupportPackage(BriefcaseCommandError):
@@ -183,6 +204,25 @@ supported on {platform_name}. You will need to:
         )
 
 
+class MissingStubBinary(BriefcaseCommandError):
+    def __init__(self, python_version_tag, platform, host_arch, is_32bit):
+        self.python_version_tag = python_version_tag
+        self.platform = platform
+        self.host_arch = host_arch
+        self.is_32bit = is_32bit
+        platform_name = f"{'32 bit ' if is_32bit else ''}{platform}"
+        super().__init__(
+            f"""\
+Unable to download {platform_name} stub binary for Python {self.python_version_tag} on {self.host_arch}.
+
+This is likely because either Python {self.python_version_tag} and/or {self.host_arch} is not yet
+supported on {platform_name}. You will need to:
+    * Use an older version of Python; or
+    * Compile your own stub binary.
+"""
+        )
+
+
 class RequirementsInstallError(BriefcaseCommandError):
     def __init__(self, install_hint=""):
         super().__init__(
@@ -190,6 +230,18 @@ class RequirementsInstallError(BriefcaseCommandError):
 Unable to install requirements. This may be because one of your
 requirements is invalid, or because pip was unable to connect
 to the PyPI server.{install_hint}
+"""
+        )
+
+
+class UnsupportedPythonVersion(BriefcaseCommandError):
+    def __init__(self, version_specifier, running_version):
+        super().__init__(
+            f"""\
+Unable to run Briefcase command. The project configuration requires
+Python versions {version_specifier}, but the environment's Python
+version is {running_version}. Please run Briefcase using a Python
+version that satisfies the project's requirements.
 """
         )
 
@@ -204,7 +256,7 @@ class InvalidDeviceError(BriefcaseCommandError):
     def __init__(self, id_type, device):
         self.id_type = id_type
         self.device = device
-        super().__init__(msg=f"Invalid device {id_type} '{device}'")
+        super().__init__(msg=f"Invalid device {id_type} {device!r}")
 
 
 class CorruptToolError(BriefcaseCommandError):
@@ -224,6 +276,11 @@ class BriefcaseTestSuiteFailure(BriefcaseError):
 
 
 class NoDistributionArtefact(BriefcaseWarning):
+    def __init__(self, msg):
+        super().__init__(error_code=0, msg=msg)
+
+
+class NotarizationInterrupted(BriefcaseWarning):
     def __init__(self, msg):
         super().__init__(error_code=0, msg=msg)
 

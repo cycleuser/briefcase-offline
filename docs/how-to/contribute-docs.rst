@@ -19,8 +19,11 @@ the other index files for clues.
 Build documentation locally
 ---------------------------
 
+.. Docs are always built on Python 3.12. See also the RTD and tox config.
+
 To build the documentation locally, :ref:`set up a development environment
-<setup-dev-environment>`.
+<setup-dev-environment>`. However, you **must** have a Python 3.12 interpreter installed
+and available on your path (i.e., ``python3.12`` must start a Python 3.12 interpreter).
 
 You'll also need to install the Enchant spell checking library.
 
@@ -34,7 +37,7 @@ You'll also need to install the Enchant spell checking library.
 
       (venv) $ brew install enchant
 
-    If you're on an M1 machine, you'll also need to manually set the location
+    If you're on an Apple Silicon machine, you'll also need to manually set the location
     of the Enchant library:
 
     .. code-block:: console

@@ -41,7 +41,7 @@ class AppPackagesMergeMixin:
             are in the install path that are non-universal and non-pure.
         """
         binary_packages = []
-        for distinfo in install_path.glob("**/*.dist-info"):
+        for distinfo in install_path.glob("*.dist-info"):
             # Read the WHEEL file in the dist-info folder.
             # Use this to determine if the wheel is "pure", and the tag
             # for the wheel.
@@ -175,7 +175,9 @@ class AppPackagesMergeMixin:
             self.logger.info(f"Thinning libraries in {app_packages.name}...")
             task_id = progress_bar.add_task("Create fat libraries", total=len(dylibs))
             with progress_bar:
-                with concurrent.futures.ThreadPoolExecutor() as executor:
+                with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=1 if self.logger.verbosity >= 3 else None
+                ) as executor:
                     futures = []
                     for path in dylibs:
                         future = executor.submit(
@@ -252,7 +254,9 @@ class AppPackagesMergeMixin:
             self.logger.info("Merging libraries...")
             task_id = progress_bar.add_task("Create fat libraries", total=len(dylibs))
             with progress_bar:
-                with concurrent.futures.ThreadPoolExecutor() as executor:
+                with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=1 if self.logger.verbosity >= 3 else None
+                ) as executor:
                     futures = []
                     for relative_path in dylibs:
                         future = executor.submit(

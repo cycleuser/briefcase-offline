@@ -61,9 +61,10 @@ def test_extra_pip_args(create_command, first_app_generated, tmp_path):
                 "--upgrade",
                 "--no-user",
                 f"--target={bundle_path / 'app_packages.iphoneos'}",
-                "--prefer-binary",
+                "--only-binary=:all:",
                 "--extra-index-url",
                 "https://pypi.anaconda.org/beeware/simple",
+                "--platform=ios_14_2_arm64_iphoneos",
                 "something==1.2.3",
                 "other>=2.3.4",
             ],
@@ -77,7 +78,7 @@ def test_extra_pip_args(create_command, first_app_generated, tmp_path):
                     / "first-app"
                     / "ios"
                     / "xcode"
-                    / "support"
+                    / "Support"
                     / "platform-site"
                     / "iphoneos.arm64"
                 )
@@ -97,9 +98,10 @@ def test_extra_pip_args(create_command, first_app_generated, tmp_path):
                 "--upgrade",
                 "--no-user",
                 f"--target={bundle_path / 'app_packages.iphonesimulator'}",
-                "--prefer-binary",
+                "--only-binary=:all:",
                 "--extra-index-url",
                 "https://pypi.anaconda.org/beeware/simple",
+                "--platform=ios_14_2_wonky_iphonesimulator",
                 "something==1.2.3",
                 "other>=2.3.4",
             ],
@@ -113,7 +115,7 @@ def test_extra_pip_args(create_command, first_app_generated, tmp_path):
                     / "first-app"
                     / "ios"
                     / "xcode"
-                    / "support"
+                    / "Support"
                     / "platform-site"
                     / "iphonesimulator.wonky"
                 )

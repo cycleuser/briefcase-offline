@@ -3,9 +3,8 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
 
-from briefcase.commands.create import _is_local_requirement
+from briefcase.commands.create import _is_local_path
 from briefcase.commands.open import OpenCommand
 from briefcase.config import AppConfig
 from briefcase.exceptions import BriefcaseCommandError, ParseError
@@ -60,12 +59,12 @@ class LinuxMixin:
     def support_package_url(self, support_revision):
         """The URL of the support package to use for apps of this type.
 
-        Linux builds that use a support package (AppImage, Flatpak) use indygreg's
-        Standalone Python to provide system packages. See
-        `https://github.com/indygreg/python-build-standalone` for details.
+        Linux builds that use a support package (AppImage, Flatpak) use Astral's (nee
+        indygreg's) Standalone Python to provide system packages. See
+        `https://github.com/astral-sh/python-build-standalone` for details.
 
-        System packages don't use a support package; this is defined by
-        the template, so this method won't be invoked
+        System packages don't use a support package; this is defined by the template, so
+        this method won't be invoked.
         """
         python_download_arch = self.tools.host_arch
         # use a 32bit Python if using 32bit Python on 64bit hardware
@@ -76,8 +75,9 @@ class LinuxMixin:
 
         version, datestamp = support_revision.split("+")
         return (
-            "https://github.com/indygreg/python-build-standalone/releases/download/"
-            f"{datestamp}/cpython-{support_revision}-{python_download_arch}-unknown-linux-gnu-install_only.tar.gz"
+            "https://github.com/astral-sh/python-build-standalone/releases/download/"
+            f"{datestamp}/"
+            f"cpython-{support_revision}-{python_download_arch}-unknown-linux-gnu-install_only_stripped.tar.gz"
         )
 
     def vendor_details(self, freedesktop_info):
@@ -133,7 +133,7 @@ class LocalRequirementsMixin:  # pragma: no-cover-if-is-windows
     def _install_app_requirements(
         self,
         app: AppConfig,
-        requires: List[str],
+        requires: list[str],
         app_packages_path: Path,
     ):
         """Install requirements for the app with pip.
@@ -156,7 +156,7 @@ class LocalRequirementsMixin:  # pragma: no-cover-if-is-windows
 
         # Iterate over every requirement, looking for local references
         for requirement in requires:
-            if _is_local_requirement(requirement):
+            if _is_local_path(requirement):
                 if Path(requirement).is_dir():
                     # Requirement is a filesystem reference
                     # Build an sdist for the local requirement
@@ -196,7 +196,7 @@ class LocalRequirementsMixin:  # pragma: no-cover-if-is-windows
             app_packages_path=app_packages_path,
         )
 
-    def _pip_requires(self, app: AppConfig, requires: List[str]):
+    def _pip_requires(self, app: AppConfig, requires: list[str]):
         """Convert the requirements list to an .deb project compatible format.
 
         Any local file requirements are converted into a reference to the file generated
@@ -210,7 +210,7 @@ class LocalRequirementsMixin:  # pragma: no-cover-if-is-windows
         final = [
             requirement
             for requirement in super()._pip_requires(app, requires)
-            if not _is_local_requirement(requirement)
+            if not _is_local_path(requirement)
         ]
 
         # Add in any local packages.

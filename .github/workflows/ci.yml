@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_call:
+    inputs:
+      attest-package:
+        description: "Create GitHub provenance attestation for the package."
+        default: "false"
+        type: string
     outputs:
       artifact-name:
         description: "Name of the uploaded artifact; use for artifact retrieval."
@@ -32,62 +37,69 @@ jobs:
     uses: beeware/.github/.github/workflows/towncrier-run.yml@main
 
   package:
-    name: Python package
+    name: Package Briefcase
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
     uses: beeware/.github/.github/workflows/python-package-create.yml@main
     with:
-      tox-factors: -with-automation
+      attest: ${{ inputs.attest-package }}
+
+  package-automation:
+    name: Package Automation
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+    uses: beeware/.github/.github/workflows/python-package-create.yml@main
+    with:
+      build-subdirectory: "automation"
 
   unit-tests:
     name: Unit tests
     needs: [ pre-commit, towncrier, package ]
     runs-on: ${{ matrix.platform }}
-    continue-on-error: ${{ matrix.experimental }}
+    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
-        platform: [ "macos-12", "macos-14", "windows-latest", "ubuntu-latest" ]
-        python-version: [ "3.8", "3.12", "3.13-dev" ]
+        platform: [ "macos-13", "macos-latest", "windows-latest", "ubuntu-latest" ]
+        python-version: [ "3.9", "3.13" ]
         include:
-          - experimental: false
-          - platform: "ubuntu-latest"
-            python-version: "3.9"
-            experimental: false
+          # Ensure the Python versions between min and max are tested
           - platform: "ubuntu-latest"
             python-version: "3.10"
-            experimental: false
           - platform: "ubuntu-latest"
             python-version: "3.11"
-            experimental: false
-          # Allow dev Python to fail without failing entire job
-          - python-version: "3.13-dev"
-            experimental: true
-        exclude:
-          # macos-14 (i.e. arm64) does not support Python 3.8
-          - platform: "macos-14"
-            python-version: "3.8"
+          - platform: "ubuntu-latest"
+            python-version: "3.12"
+          # # Allow dev Python to fail without failing entire job
+          # - python-version: "3.14"
+          #   experimental: true
     steps:
     - name: Checkout
-      uses: actions/checkout@v4.1.2
+      uses: actions/checkout@v4.2.2
       with:
         fetch-depth: 0
 
     - name: Set up Python
-      uses: actions/setup-python@v5.1.0
+      uses: actions/setup-python@v5.3.0
       with:
         python-version: ${{ matrix.python-version }}
+        allow-prereleases: true
 
     - name: Get Packages
-      uses: actions/download-artifact@v4.1.4
+      uses: actions/download-artifact@v4.1.8
       with:
         name: ${{ needs.package.outputs.artifact-name }}
         path: dist
 
-    - name: Install dev Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install --upgrade setuptools build wheel
-        # Utility script installs tox as defined in pyproject.toml
-        python -m install_requirement tox --extra dev
+    - name: Install Tox
+      uses: beeware/.github/.github/actions/install-requirement@main
+      with:
+        requirements: tox
+        extra: dev
 
     - name: Test
       id: test
@@ -99,11 +111,12 @@ jobs:
 
     - name: Store Coverage Data
       if: always() && contains('success,failure', steps.test.outcome)
-      uses: actions/upload-artifact@v4.3.1
+      uses: actions/upload-artifact@v4.6.0
       with:
         name: coverage-data-${{ matrix.platform }}-${{ matrix.python-version }}
         path: ".coverage.*"
-        if-no-files-found: ignore
+        if-no-files-found: error
+        include-hidden-files: true
 
     - name: Report Platform Coverage
       id: coverage
@@ -118,26 +131,25 @@ jobs:
     if: always() && contains('success,failure', needs.unit-tests.result)
     steps:
     - name: Checkout
-      uses: actions/checkout@v4.1.2
+      uses: actions/checkout@v4.2.2
       with:
         fetch-depth: 0
 
     - name: Setup Python
-      uses: actions/setup-python@v5.1.0
+      uses: actions/setup-python@v5.3.0
       with:
         # Use minimum version of python for coverage to avoid phantom branches
         # https://github.com/nedbat/coveragepy/issues/1572#issuecomment-1522546425
-        python-version: "3.8"
+        python-version: "3.9"
 
-    - name: Install dev Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install --upgrade setuptools build wheel
-        # Utility script installs tox as defined in pyproject.toml
-        python -m install_requirement tox --extra dev
+    - name: Install Tox
+      uses: beeware/.github/.github/actions/install-requirement@main
+      with:
+        requirements: tox
+        extra: dev
 
     - name: Retrieve Coverage Data
-      uses: actions/download-artifact@v4.1.4
+      uses: actions/download-artifact@v4.1.8
       with:
         pattern: coverage-data-*
         merge-multiple: true
@@ -155,14 +167,14 @@ jobs:
 
     - name: Upload Project Coverage HTML Report
       if: always() && steps.project-coverage.outcome == 'failure'
-      uses: actions/upload-artifact@v4.3.1
+      uses: actions/upload-artifact@v4.6.0
       with:
         name: html-coverage-report-project
         path: htmlcov
 
   verify-projects:
     name: Verify project
-    needs: unit-tests
+    needs: [ package, package-automation, unit-tests ]
     uses: beeware/.github/.github/workflows/app-create-verify.yml@main
     with:
       runner-os: ${{ matrix.runner-os }}
@@ -170,24 +182,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        framework: [ "toga", "pyside6", "ppb", "pygame" ]
-        runner-os: [ "macos-12", "macos-14", "ubuntu-22.04", "windows-latest" ]
+        framework: [ "toga", "pyside6", "pygame", "console" ]
+        runner-os: [ "macos-13", "macos-latest", "ubuntu-latest", "windows-latest" ]
 
   verify-apps:
     name: Build app
-    needs: unit-tests
+    needs: [ package, package-automation, unit-tests ]
     uses: beeware/.github/.github/workflows/app-build-verify.yml@main
     with:
-      # This *must* be the version of Python that is the system Python on the
-      # Ubuntu version used to run Linux tests. We use a fixed ubuntu-22.04
-      # rather than `-latest` because at some point, `-latest` will become
-      # `-24.04`, but it will be a soft changeover, which will cause havoc with
-      # the hard Python version requirement for local system packages.
-      python-version: "3.10"
+      python-version: ${{ matrix.python-version }}
       runner-os: ${{ matrix.runner-os }}
       framework: ${{ matrix.framework }}
     strategy:
       fail-fast: false
       matrix:
-        framework: [ "toga", "pyside6", "ppb", "pygame" ]
-        runner-os: [ "macos-12", "macos-14", "ubuntu-22.04", "windows-latest" ]
+        framework: [ "toga", "pyside6", "pygame", "console" ]
+        runner-os: [ "macos-13", "macos-latest", "ubuntu-latest", "windows-latest" ]
+
+        include:
+          # A version of Python that is supported by all the GUI toolkits.
+          - python-version: "3.12"
+
+          # Ubuntu must always use the system Python
+          - runner-os: ubuntu-latest
+            python-version: system

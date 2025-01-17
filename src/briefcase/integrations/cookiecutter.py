@@ -1,5 +1,7 @@
 """Jinja2 extensions."""
 
+import uuid
+
 from jinja2.ext import Extension
 
 
@@ -62,7 +64,7 @@ class TOMLEscape(Extension):
 
         def escape_toml(obj):
             """Escapes double quotes and backslashes."""
-            return obj.replace('"', '"').replace("\\", "\\\\")
+            return obj.replace("\\", "\\\\").replace('"', '\\"')
 
         def escape_non_ascii(obj):
             """Quotes obj if non ascii characters are present."""
@@ -72,6 +74,28 @@ class TOMLEscape(Extension):
                 return '"' + obj + '"'
 
         environment.filters["escape_toml"] = escape_toml
+        environment.filters["escape_non_ascii"] = escape_non_ascii
+
+
+class GradleEscape(Extension):
+    """Jinja2 extension to escape strings for Gradle as well."""
+
+    def __init__(self, environment):
+        """Initialize the extension with the given environment."""
+        super().__init__(environment)
+
+        def escape_gradle(obj):
+            """Escapes single quotes and backslashes."""
+            return obj.replace("\\", "\\\\").replace("'", "\\'")
+
+        def escape_non_ascii(obj):
+            """Quotes obj if non ascii characters are present."""
+            if obj.isascii():
+                return obj
+            else:
+                return '"' + obj + '"'
+
+        environment.filters["escape_gradle"] = escape_gradle
         environment.filters["escape_non_ascii"] = escape_non_ascii
 
 
@@ -116,3 +140,17 @@ class XMLExtension(Extension):
             return "true" if obj else "false"
 
         environment.filters["bool_attr"] = bool_attr
+
+
+class UUIDExtension(Extension):
+    """Extensions for generating UUIDs."""
+
+    def __init__(self, environment):
+        """Initialize the extension with the given environment."""
+        super().__init__(environment)
+
+        def dns_uuid5(obj):
+            """A DNS-based UUID5 object generated from the provided content."""
+            return str(uuid.uuid5(uuid.NAMESPACE_DNS, obj))
+
+        environment.filters["dns_uuid5"] = dns_uuid5

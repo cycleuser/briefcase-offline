@@ -17,9 +17,9 @@ class JDK(ManagedTool):
     name = "java"
     full_name = "Java JDK"
 
-    # Latest OpenJDK as of September 2023: https://adoptium.net/temurin/releases/
+    # Latest OpenJDK as of July 2024: https://adoptium.net/temurin/releases/
     JDK_MAJOR_VER = "17"
-    JDK_RELEASE = "17.0.10"
+    JDK_RELEASE = "17.0.12"
     JDK_BUILD = "7"
     JDK_INSTALL_DIR_NAME = f"java{JDK_MAJOR_VER}"
 
@@ -275,7 +275,7 @@ class JDK(ManagedTool):
 
     def install(self):
         """Download and install a JDK."""
-        jdk_zip_path = self.tools.download.file(
+        jdk_zip_path = self.tools.file.download(
             url=self.OpenJDK_download_url,
             download_path=self.tools.base_path,
             role=f"Java {self.JDK_MAJOR_VER} JDK",
@@ -283,7 +283,7 @@ class JDK(ManagedTool):
 
         with self.tools.input.wait_bar("Installing OpenJDK..."):
             try:
-                self.tools.shutil.unpack_archive(
+                self.tools.file.unpack_archive(
                     os.fsdecode(jdk_zip_path),
                     extract_dir=os.fsdecode(self.tools.base_path),
                 )

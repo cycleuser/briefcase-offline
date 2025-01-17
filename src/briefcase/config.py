@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import copy
 import keyword
 import re
 import sys
 import unicodedata
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 if sys.version_info >= (3, 11):  # pragma: no-cover-if-lt-py311
     import tomllib
@@ -15,8 +18,12 @@ from briefcase.platforms import get_output_formats, get_platforms
 from .constants import RESERVED_WORDS
 from .exceptions import BriefcaseConfigError
 
-# PEP508 provides a basic restriction on naming
-PEP508_NAME_RE = re.compile(r"^([A-Z0-9]|[A-Z0-9][A-Z0-9._-]*[A-Z0-9])$", re.IGNORECASE)
+# PEP 508 restricts the naming of modules. The PEP defines a regex that uses
+# re.IGNORECASE; but in in practice, packaging uses a version that rolls out the lower
+# case, which has very slightly different semantics with non-ASCII characters. This
+# definition is the one from
+# https://github.com/pypa/packaging/blob/24.0/src/packaging/_tokenizer.py#L80
+PEP508_NAME_RE = re.compile(r"^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9])$")
 
 
 def is_valid_pep508_name(app_name):
@@ -69,10 +76,75 @@ def make_class_name(formal_name):
 
     # If the first character isn't in the 'start' character set,
     # and it isn't already an underscore, prepend an underscore.
-    if unicodedata.category(class_name[0]) not in xid_start and class_name[0] != "_":
+    if (
+        class_name
+        and unicodedata.category(class_name[0]) not in xid_start
+        and class_name[0] != "_"
+    ):
         class_name = f"_{class_name}"
 
     return class_name
+
+
+def validate_url(candidate):
+    """Determine if the URL is valid.
+
+    :param candidate: The candidate URL
+    :returns: True. If there are any validation problems, raises ValueError with a
+        diagnostic message.
+    """
+    result = urlparse(candidate)
+    if not all([result.scheme, result.netloc]):
+        raise ValueError("Not a valid URL!")
+    if result.scheme not in {"http", "https"}:
+        raise ValueError("Not a valid website URL!")
+    return True
+
+
+def validate_document_type_config(document_type_id, document_type):
+    try:
+        if not (
+            isinstance(document_type["extension"], str)
+            and document_type["extension"].isalnum()
+        ):
+            raise BriefcaseConfigError(
+                f"The extension provided for document type {document_type_id!r} is not alphanumeric."
+            )
+    except KeyError:
+        raise BriefcaseConfigError(
+            f"Document type {document_type_id!r} does not provide an extension."
+        )
+
+    try:
+        if not isinstance(document_type["icon"], str):
+            raise BriefcaseConfigError(
+                f"The icon definition associated with document type {document_type_id!r} is not a string."
+            )
+    except KeyError:
+        raise BriefcaseConfigError(
+            f"Document type {document_type_id!r} does not define an icon."
+        )
+
+    try:
+        if not isinstance(document_type["description"], str):
+            raise BriefcaseConfigError(
+                f"The description associated with document type {document_type_id!r} is not a string."
+            )
+    except KeyError:
+        raise BriefcaseConfigError(
+            f"Document type {document_type_id!r} does not provide a description."
+        )
+
+    try:
+        validate_url(document_type["url"])
+    except KeyError:
+        raise BriefcaseConfigError(
+            f"Document type {document_type_id!r} does not provide a URL."
+        )
+    except ValueError as e:
+        raise BriefcaseConfigError(
+            f"The URL associated with document type {document_type_id!r} is invalid: {e}"
+        )
 
 
 VALID_BUNDLE_RE = re.compile(r"[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+$")
@@ -82,15 +154,6 @@ def is_valid_bundle_identifier(bundle):
     # Ensure the bundle identifier follows the basi
     if not VALID_BUNDLE_RE.match(bundle):
         return False
-
-    for part in bundle.split("."):
-        # *Some* 2-letter country codes are valid identifiers,
-        # even though they're reserved words; see:
-        #    https://www.oracle.com/java/technologies/javase/codeconventions-namingconventions.html
-        # `.do` *should* be on this list, but as of Apr 2022, `.do` breaks
-        # the Android build tooling.
-        if is_reserved_keyword(part) and part not in {"in", "is"}:
-            return False
 
     return True
 
@@ -150,9 +213,11 @@ class GlobalConfig(BaseConfig):
         project_name,
         version,
         bundle,
+        license=None,
         url=None,
         author=None,
         author_email=None,
+        requires_python=None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -162,6 +227,8 @@ class GlobalConfig(BaseConfig):
         self.url = url
         self.author = author
         self.author_email = author_email
+        self.license = license
+        self.requires_python = requires_python
 
         # Version number is PEP440 compliant:
         if not is_pep440_canonical_version(self.version):
@@ -183,13 +250,13 @@ class AppConfig(BaseConfig):
         bundle,
         description,
         sources,
+        license,
         formal_name=None,
         url=None,
         author=None,
         author_email=None,
         requires=None,
         icon=None,
-        splash=None,
         document_type=None,
         permission=None,
         template=None,
@@ -198,6 +265,8 @@ class AppConfig(BaseConfig):
         test_requires=None,
         supported=True,
         long_description=None,
+        console_app=False,
+        requirement_installer_args: list[str] | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -217,7 +286,6 @@ class AppConfig(BaseConfig):
         self.author_email = author_email
         self.requires = requires
         self.icon = icon
-        self.splash = splash
         self.document_types = {} if document_type is None else document_type
         self.permission = {} if permission is None else permission
         self.template = template
@@ -226,6 +294,11 @@ class AppConfig(BaseConfig):
         self.test_requires = test_requires
         self.supported = supported
         self.long_description = long_description
+        self.license = license
+        self.console_app = console_app
+        self.requirement_installer_args = (
+            [] if requirement_installer_args is None else requirement_installer_args
+        )
 
         if not is_valid_app_name(self.app_name):
             raise BriefcaseConfigError(
@@ -243,6 +316,9 @@ class AppConfig(BaseConfig):
                 "and hyphens; and each section may not contain any reserved words (like\n"
                 "'switch', or 'while')."
             )
+
+        for document_type_id, document_type in self.document_types.items():
+            validate_document_type_config(document_type_id, document_type)
 
         # Version number is PEP440 compliant:
         if not is_pep440_canonical_version(self.version):
@@ -373,6 +449,9 @@ def merge_config(config, data):
 def merge_pep621_config(global_config, pep621_config):
     """Merge a PEP621 configuration into a Briefcase configuration."""
 
+    if requires_python := pep621_config.get("requires-python"):
+        global_config["requires_python"] = requires_python
+
     def maybe_update(field, *project_fields):
         # If there's an existing key in the Briefcase config, it takes priority.
         if field in global_config:
@@ -391,7 +470,7 @@ def merge_pep621_config(global_config, pep621_config):
 
     # Keys that map directly
     maybe_update("description", "description")
-    maybe_update("license", "license", "text")
+    maybe_update("license", "license")
     maybe_update("url", "urls", "Homepage")
     maybe_update("version", "version")
 
@@ -424,7 +503,7 @@ def merge_pep621_config(global_config, pep621_config):
         pass
 
 
-def parse_config(config_file, platform, output_format):
+def parse_config(config_file, platform, output_format, logger):
     """Parse the briefcase section of the pyproject.toml configuration file.
 
     This method only does basic structural parsing of the TOML, looking for,
@@ -476,6 +555,37 @@ def parse_config(config_file, platform, output_format):
         all_apps = global_config.pop("app")
     except KeyError as e:
         raise BriefcaseConfigError("No Briefcase apps defined in pyproject.toml") from e
+
+    for name, config in [("project", global_config)] + list(all_apps.items()):
+        if isinstance(config.get("license"), str):
+            section_name = "the Project" if name == "project" else f"{name!r}"
+            logger.warning(
+                f"""
+*************************************************************************
+** {f"WARNING: License Definition for {section_name} is Deprecated":67} **
+*************************************************************************
+
+    Briefcase now uses PEP 621 format for license definitions.
+
+    Previously, the name of the license was assigned to the 'license'
+    field in pyproject.toml. For PEP 621, the name of the license is
+    assigned to 'license.text' or the name of the file containing the
+    license is assigned to 'license.file'.
+
+    The current configuration for {section_name} has a 'license' field
+    that is specified as a string:
+
+        license = "{config['license']}"
+
+    To use the PEP 621 format (and to remove this warning), specify that
+    the LICENSE file contains the license for {section_name}:
+
+        license.file = "LICENSE"
+
+*************************************************************************
+"""
+            )
+            config["license"] = {"file": "LICENSE"}
 
     # Build the flat configuration for each app,
     # based on the requested platform and output format
